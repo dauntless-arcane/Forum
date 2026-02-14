@@ -1,0 +1,249 @@
+// ─── Forum Backend Server ─────────────────────────────────────────
+require('dotenv').config();
+
+const http = require('http'); // Import http module
+const express = require('express');
+const { Server } = require('socket.io'); // Impor Socket.IOt
+const cors = require('cors');
+const helmet = require('helmet');
+const morgan = require('morgan');
+const rateLimit = require('express-rate-limit');
+
+const { connectDB, closeDB } = require('./config/database');
+const { connectRedis, closeRedis, getRedis } = require('./config/redis');
+const Redis = require('ioredis');
+const { createAdapter } = require('@socket.io/redis-adapter');
+
+
+
+// Route imports
+const authRoutes = require('./routes/auth');
+const questionRoutes = require('./routes/questions');
+const answerRoutes = require('./routes/answers');
+const userRoutes = require('./routes/users');
+const moderationRoutes = require('./routes/moderation');
+const tagRoutes = require('./routes/tags');
+
+// Swagger
+const swaggerUi = require('swagger-ui-express');
+const swaggerSpec = require('./config/swagger');
+
+const app = express();
+const server = http.createServer(app); // Create HTTP server
+const PORT = process.env.PORT || 5000;
+
+// ──────────────── Swagger Documentation ────────────────
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+
+// ──────────────── Socket.IO Setup with Redis Adapter ────────────────
+const io = new Server(server, {
+    cors: {
+        origin: [
+            process.env.FRONTEND_URL || 'http://localhost:5173',
+            'https://forum-gamma-one.vercel.app',
+            'http://localhost:3000',
+        ],
+        methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+        credentials: true,
+    },
+});
+
+// Redis Adapter logic for scaling across multiple instances
+const pubClient = new Redis({
+    host: process.env.REDIS_HOST || 'localhost',
+    port: Number(process.env.REDIS_PORT) || 6379,
+    password: process.env.REDIS_PASSWORD,
+    lazyConnect: true // Prevent instant connection, wait for startServer()
+});
+const subClient = pubClient.duplicate();
+
+Promise.all([pubClient.connect(), subClient.connect()]).then(() => {
+    io.adapter(createAdapter(pubClient, subClient));
+    console.log('✅ Socket.IO Redis Adapter configured');
+}).catch(err => console.warn('⚠️  Redis Adapter failed (running in single-node mode):', err.message));
+
+io.on('connection', (socket) => {
+    console.log(`🔌 New client connected: ${socket.id}`);
+
+    socket.on('join_specialist_room', () => {
+        socket.join('specialists');
+        console.log(`Client ${socket.id} joined specialist room`);
+    });
+
+    socket.on('join_explore', () => {
+        socket.join('explore_feed');
+        console.log(`Client ${socket.id} joined explore feed`);
+    });
+
+    socket.on('disconnect', () => {
+        console.log(`Client disconnected: ${socket.id}`);
+    });
+});
+
+// Make io accessible to our routes
+app.use((req, res, next) => {
+    req.io = io;
+    next();
+});
+
+// ──────────────── Security Middleware ────────────────
+app.use(helmet());
+
+// ──────────────── CORS ────────────────
+app.use(cors({
+    origin: [
+        process.env.FRONTEND_URL || 'http://localhost:5173',
+        'https://forum-gamma-one.vercel.app',
+        'http://localhost:3000',
+    ],
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+}));
+
+// ──────────────── Body Parsing ────────────────
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// ──────────────── Logging ────────────────
+if (process.env.NODE_ENV !== 'test') {
+    app.use(morgan('dev'));
+}
+
+// ──────────────── Rate Limiting ────────────────
+const generalLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 200,
+    message: { error: 'Too many requests. Please try again later.' },
+    standardHeaders: true,
+    legacyHeaders: false,
+});
+
+const authLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 20,
+    message: { error: 'Too many login attempts. Please try again later.' },
+    standardHeaders: true,
+    legacyHeaders: false,
+});
+
+app.use('/api/', generalLimiter);
+app.use('/api/auth/login', authLimiter);
+app.use('/api/auth/signup', authLimiter);
+
+// ──────────────── Health Check ────────────────
+app.get('/api/health', async (req, res) => {
+    const redis = getRedis();
+    const redisStatus = redis ? 'connected' : 'disconnected (operating without cache)';
+
+    res.json({
+        status: 'ok',
+        timestamp: new Date().toISOString(),
+        services: {
+            mongodb: 'connected',
+            redis: redisStatus,
+            socketio: 'initialized',
+        },
+    });
+});
+
+// ──────────────── API Routes ────────────────
+app.use('/api/auth', authRoutes);
+app.use('/api/questions', questionRoutes);
+app.use('/api/answers', answerRoutes);
+app.use('/api/users', userRoutes);
+app.use('/api/moderation', moderationRoutes);
+app.use('/api/tags', tagRoutes);
+
+// ──────────────── 404 Handler ────────────────
+app.use((req, res) => {
+    res.status(404).json({ error: 'Route not found.' });
+});
+
+// ──────────────── Error Handler ────────────────
+app.use((err, req, res, next) => {
+    console.error('Unhandled error:', err);
+    res.status(500).json({
+        error: process.env.NODE_ENV === 'production'
+            ? 'Internal server error.'
+            : err.message,
+    });
+});
+
+// ──────────────── Start Server ────────────────
+async function startServer() {
+    try {
+        // Connect to databases
+        await connectDB();
+        connectRedis();
+
+        // Use server.listen instead of app.listen
+        server.listen(PORT, () => {
+            console.log(`
+╔══════════════════════════════════════════════╗
+║        🚀 Forum API Server Running          ║
+╠══════════════════════════════════════════════╣
+║  Port:      ${String(PORT).padEnd(33)}║
+║  Mode:      ${(process.env.NODE_ENV || 'development').padEnd(33)}║
+║  Docs:      http://localhost:${String(PORT).padEnd(5)}/api-docs     ║
+║  MongoDB:   Connected                       ║
+║  Redis:     ${(getRedis() ? 'Connected' : 'Disabled (optional)').padEnd(33)}║
+║  Socket.IO: Enabled (Specialists Room)      ║
+╠══════════════════════════════════════════════╣
+║  Endpoints:                                  ║
+║  POST   /api/auth/signup                     ║
+║  POST   /api/auth/login                      ║
+║  POST   /api/auth/bulk-create (admin)        ║
+║  GET    /api/auth/me                         ║
+║  GET    /api/questions                       ║
+║  POST   /api/questions                       ║
+║  GET    /api/questions/:id                   ║
+║  PUT    /api/questions/:id                   ║
+║  DELETE /api/questions/:id                   ║
+║  POST   /api/answers/:questionId             ║
+║  PUT    /api/answers/:id                     ║
+║  DELETE /api/answers/:id                     ║
+║  POST   /api/answers/:id/upvote              ║
+║  POST   /api/answers/:id/best                ║
+║  GET    /api/users/specialists               ║
+║  GET    /api/users/:id                       ║
+║  PUT    /api/users/profile                   ║
+║  GET    /api/tags                            ║
+║  POST   /api/moderation/report               ║
+║  GET    /api/moderation/reports (admin)       ║
+║  POST   /api/moderation/action  (admin)      ║
+║  GET    /api/moderation/flagged (admin)       ║
+║  POST   /api/moderation/scan   (admin)       ║
+║  POST   /api/moderation/remove/:t/:id (admin)║
+║  POST   /api/moderation/ban/:userId (admin)  ║
+║  POST   /api/moderation/unban/:userId (admin)║
+║  GET    /api/moderation/stats  (admin)       ║
+║  GET    /api/moderation/logs   (admin)       ║
+║  GET    /api/health                          ║
+╚══════════════════════════════════════════════╝
+      `);
+        });
+    } catch (err) {
+        console.error('❌ Failed to start server:', err);
+        process.exit(1);
+    }
+}
+
+// ──────────────── Graceful Shutdown ────────────────
+process.on('SIGINT', async () => {
+    console.log('\n🔄 Shutting down gracefully...');
+    await closeDB();
+    await closeRedis();
+    process.exit(0);
+});
+
+process.on('SIGTERM', async () => {
+    console.log('\n🔄 Shutting down gracefully...');
+    await closeDB();
+    await closeRedis();
+    process.exit(0);
+});
+
+startServer();
+
+module.exports = app;
