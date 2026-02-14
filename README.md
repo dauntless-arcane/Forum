@@ -12,7 +12,7 @@ Backend for the Forum application built with Express, MongoDB, Redis, and Socket
 
 ## Prerequisites
 - MongoDB running on `mongodb://localhost:27017`
-- Redis running on `redis://localhost:6379` (Optional, but recommended)
+- Redis running on `redis://localhost:6379` 
 - Node.js (v18+)
 
 ## Setup
