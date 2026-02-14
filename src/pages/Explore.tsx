@@ -1,9 +1,9 @@
-import { useState, useMemo } from 'react';
 import { Filter } from 'lucide-react';
-import { questions, users, tags } from '../mockData';
+import { useMemo, useState } from 'react';
 import QuestionCard from '../components/QuestionCard';
 import SearchBar from '../components/SearchBar';
 import TagChip from '../components/TagChip';
+import { questions, tags, users } from '../mockData';
 
 export default function Explore() {
   const [searchQuery, setSearchQuery] = useState('');
@@ -144,7 +144,7 @@ export default function Explore() {
         </div>
       )}
 
-      <div className="space-y-4">
+      <div className="space-y-6">
         {filteredQuestions.length === 0 ? (
           <div className="text-center py-12">
             <p className="text-gray-600 dark:text-slate-400">No questions found matching your criteria.</p>
@@ -152,7 +152,11 @@ export default function Explore() {
         ) : (
           filteredQuestions.map((question) => {
             const author = users.find((u) => u.id === question.userId)!;
-            return <QuestionCard key={question.id} question={question} author={author} />;
+            return (
+                <div key={question.id} className="mb-4">
+                  <QuestionCard question={question} author={author} />
+                </div>
+              );
           })
         )}
       </div>

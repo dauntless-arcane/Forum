@@ -1,4 +1,4 @@
-import { User, Question, Tag } from './types';
+import { Question, Tag, User } from './types';
 
 export const currentUser: User = {
   id: 'user1',
@@ -7,33 +7,51 @@ export const currentUser: User = {
   avatar: '👨‍🎓',
 };
 
+
 export const users: User[] = [
-  currentUser,
+  {
+    id: 'user1',
+    name: 'Alex Student',
+    role: 'student',
+    avatar: '👨‍🎓',
+  },
   {
     id: 'user2',
-    name: 'Dr. Sarah Chen',
+    name: 'Dr. Emma Wilson',
     role: 'specialist',
-    avatar: '👩‍🏫',
+    avatar: '👩‍⚕️',
+    profession: 'Psychologist',
+    expertise: ['Anxiety', 'Mental Health', 'Productivity'],
+    verified: true,
   },
   {
     id: 'user3',
-    name: 'Mike Johnson',
+    name: 'Mark Johnson',
     role: 'specialist',
     avatar: '👨‍💼',
+    profession: 'Corporate Strategist',
+    expertise: ['Leadership', 'Startup Growth', 'Team Management'],
+    verified: true,
   },
   {
-    id: 'user4',
-    name: 'Emma Wilson',
-    role: 'student',
-    avatar: '👩‍🎓',
+  id: 'user4',
+  name: 'Sarah Lee',
+  role: 'student',
+  avatar: '👩‍🎓',
   },
+
   {
     id: 'user5',
-    name: 'Prof. David Lee',
+    name: 'Dr. Robert Kim',
     role: 'specialist',
-    avatar: '👨‍🏫',
+    avatar: '👨‍⚕️',
+    profession: 'Career Advisor',
+    expertise: ['Interviews', 'Resume', 'Leadership'],
+    verified: true,
   },
+
 ];
+
 
 export const tags: Tag[] = [
   { name: 'mental-health', category: 'psychology' },

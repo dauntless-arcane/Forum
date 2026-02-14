@@ -1,10 +1,12 @@
-import { useState, useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { Route, BrowserRouter as Router, Routes } from 'react-router-dom';
 import Navbar from './components/Navbar';
-import Explore from './pages/Explore';
-import Dashboard from './pages/Dashboard';
 import AskQuestion from './pages/AskQuestion';
+import Dashboard from './pages/Dashboard';
+import Explore from './pages/Explore';
 import QuestionDetail from './pages/QuestionDetail';
+import SpecialistDashboard from "./pages/SpecialistDashboard";
+import Specialists from "./pages/Specialists";
 
 function App() {
   const [darkMode, setDarkMode] = useState(() => {
@@ -32,6 +34,8 @@ function App() {
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/ask" element={<AskQuestion />} />
           <Route path="/question/:id" element={<QuestionDetail />} />
+          <Route path="/specialists" element={<Specialists />} />
+          <Route path="/specialist-panel" element={<SpecialistDashboard />} />
         </Routes>
       </div>
     </Router>

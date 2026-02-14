@@ -3,7 +3,15 @@ export interface User {
   name: string;
   role: 'student' | 'specialist';
   avatar: string;
+
+  // Template-only display fields (optional)
+  profession?: string;
+  expertise?: string[];
+  verified?: boolean;
 }
+
+
+
 
 export interface Answer {
   id: string;

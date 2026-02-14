@@ -1,5 +1,5 @@
+import { Eye, MessageSquare } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { MessageSquare, Eye } from 'lucide-react';
 import { Question, User } from '../types';
 import TagChip from './TagChip';
 
@@ -46,7 +46,7 @@ export default function QuestionCard({ question, author }: QuestionCardProps) {
               <span>{formatDate(question.createdAt)}</span>
             </div>
           </div>
-          <div className="flex flex-col items-end gap-2 text-sm text-gray-600 dark:text-slate-400">
+          <div className="flex flex-col items-end gap-4 text-sm text-gray-600 dark:text-slate-400">
             <div className="flex items-center gap-1">
               <MessageSquare size={16} />
               <span>{question.answers.length}</span>
