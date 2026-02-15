@@ -80,8 +80,8 @@ export default function Navbar({ darkMode, toggleDarkMode }: NavbarProps) {
 
             {user?.role === 'specialist' && (
               <Link
-                to="/specialist-dashboard"
-                className={isActive("/specialist-dashboard") ? "text-accent" : "hover:text-accent"}
+                to="/specialist-panel"
+                className={isActive("/specialist-panel") ? "text-accent" : "hover:text-accent"}
               >
                 Specialist Panel
               </Link>
@@ -164,7 +164,7 @@ export default function Navbar({ darkMode, toggleDarkMode }: NavbarProps) {
 
             {user?.role === 'specialist' && (
               <Link
-                to="/specialist-dashboard"
+                to="/specialist-panel"
                 onClick={() => setMobileOpen(false)}
                 className="block"
               >
