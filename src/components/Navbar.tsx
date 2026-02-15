@@ -8,10 +8,12 @@ import {
   Sun,
   User,
   X,
+  LogIn,
+  UserPlus
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { currentUser } from "../mockData";
+import { useAuth } from "../context/AuthContext";
 
 interface NavbarProps {
   darkMode: boolean;
@@ -20,6 +22,7 @@ interface NavbarProps {
 
 export default function Navbar({ darkMode, toggleDarkMode }: NavbarProps) {
   const location = useLocation();
+  const { user, logout, isAuthenticated } = useAuth();
   const [profileOpen, setProfileOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -59,12 +62,14 @@ export default function Navbar({ darkMode, toggleDarkMode }: NavbarProps) {
               Explore
             </Link>
 
-            <Link
-              to="/dashboard"
-              className={isActive("/dashboard") ? "text-accent" : "hover:text-accent"}
-            >
-              Dashboard
-            </Link>
+            {isAuthenticated && (
+              <Link
+                to="/dashboard"
+                className={isActive("/dashboard") ? "text-accent" : "hover:text-accent"}
+              >
+                Dashboard
+              </Link>
+            )}
 
             <Link
               to="/ask"
@@ -73,6 +78,15 @@ export default function Navbar({ darkMode, toggleDarkMode }: NavbarProps) {
               Ask Question
             </Link>
 
+            {user?.role === 'specialist' && (
+              <Link
+                to="/specialist-dashboard"
+                className={isActive("/specialist-dashboard") ? "text-accent" : "hover:text-accent"}
+              >
+                Specialist Panel
+              </Link>
+            )}
+
             <button
               onClick={toggleDarkMode}
               className="p-2 rounded-lg hover:bg-secondary/30"
@@ -80,31 +94,41 @@ export default function Navbar({ darkMode, toggleDarkMode }: NavbarProps) {
               {darkMode ? <Sun size={18} /> : <Moon size={18} />}
             </button>
 
-            {/* Profile Dropdown */}
-            <div className="relative" ref={dropdownRef}>
-              <button
-                onClick={() => setProfileOpen(!profileOpen)}
-                className="flex items-center gap-2"
-              >
-                <span className="text-xl">{currentUser.avatar}</span>
-                {currentUser.name}
-                <ChevronDown size={16} />
-              </button>
+            {/* Profile Dropdown or Login/Signup */}
+            {isAuthenticated && user ? (
+              <div className="relative" ref={dropdownRef}>
+                <button
+                  onClick={() => setProfileOpen(!profileOpen)}
+                  className="flex items-center gap-2"
+                >
+                  <span className="text-xl">{user.avatar || '👤'}</span>
+                  <span className="max-w-[100px] truncate">{user.name}</span>
+                  <ChevronDown size={16} />
+                </button>
 
-              {profileOpen && (
-                <div className="absolute right-0 mt-3 w-48 bg-white text-gray-800 rounded-xl shadow-xl py-2">
-                  <Link to="/profile" className="flex items-center gap-2 px-4 py-2 hover:bg-gray-100">
-                    <User size={16} /> Profile
-                  </Link>
-                  <Link to="/settings" className="flex items-center gap-2 px-4 py-2 hover:bg-gray-100">
-                    <Settings size={16} /> Settings
-                  </Link>
-                  <button className="flex items-center gap-2 w-full text-left px-4 py-2 hover:bg-gray-100">
-                    <LogOut size={16} /> Logout
-                  </button>
-                </div>
-              )}
-            </div>
+                {profileOpen && (
+                  <div className="absolute right-0 mt-3 w-48 bg-white text-gray-800 rounded-xl shadow-xl py-2">
+                    <Link to="/profile" className="flex items-center gap-2 px-4 py-2 hover:bg-gray-100">
+                      <User size={16} /> Profile
+                    </Link>
+                    <Link to="/settings" className="flex items-center gap-2 px-4 py-2 hover:bg-gray-100">
+                      <Settings size={16} /> Settings
+                    </Link>
+                    <button
+                      onClick={logout}
+                      className="flex items-center gap-2 w-full text-left px-4 py-2 hover:bg-gray-100 text-red-600"
+                    >
+                      <LogOut size={16} /> Logout
+                    </button>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="flex items-center gap-3">
+                <Link to="/login" className="hover:text-accent transition-colors">Log In</Link>
+                <Link to="/signup" className="border border-accent text-accent px-3 py-1.5 rounded-lg hover:bg-accent hover:text-primary transition-all">Sign Up</Link>
+              </div>
+            )}
           </div>
 
           {/* Mobile Hamburger */}
@@ -128,13 +152,25 @@ export default function Navbar({ darkMode, toggleDarkMode }: NavbarProps) {
               Explore
             </Link>
 
-            <Link
-              to="/dashboard"
-              onClick={() => setMobileOpen(false)}
-              className="block"
-            >
-              Dashboard
-            </Link>
+            {isAuthenticated && (
+              <Link
+                to="/dashboard"
+                onClick={() => setMobileOpen(false)}
+                className="block"
+              >
+                Dashboard
+              </Link>
+            )}
+
+            {user?.role === 'specialist' && (
+              <Link
+                to="/specialist-dashboard"
+                onClick={() => setMobileOpen(false)}
+                className="block"
+              >
+                Specialist Panel
+              </Link>
+            )}
 
             <Link
               to="/ask"
@@ -153,13 +189,22 @@ export default function Navbar({ darkMode, toggleDarkMode }: NavbarProps) {
             </button>
 
             <div className="border-t border-white/20 pt-4">
-              <div className="flex items-center gap-2 mb-2">
-                <span className="text-xl">{currentUser.avatar}</span>
-                {currentUser.name}
-              </div>
-              <Link to="/profile" className="block py-1">Profile</Link>
-              <Link to="/settings" className="block py-1">Settings</Link>
-              <button className="block py-1 text-left w-full">Logout</button>
+              {isAuthenticated && user ? (
+                <>
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="text-xl">{user.avatar || '👤'}</span>
+                    {user.name}
+                  </div>
+                  <Link to="/profile" onClick={() => setMobileOpen(false)} className="block py-1">Profile</Link>
+                  <Link to="/settings" onClick={() => setMobileOpen(false)} className="block py-1">Settings</Link>
+                  <button onClick={() => { logout(); setMobileOpen(false); }} className="block py-1 text-left w-full text-red-300">Logout</button>
+                </>
+              ) : (
+                <div className="space-y-2">
+                  <Link to="/login" onClick={() => setMobileOpen(false)} className="flex items-center gap-2 py-1"><LogIn size={16} /> Log In</Link>
+                  <Link to="/signup" onClick={() => setMobileOpen(false)} className="flex items-center gap-2 py-1"><UserPlus size={16} /> Sign Up</Link>
+                </div>
+              )}
             </div>
 
           </div>

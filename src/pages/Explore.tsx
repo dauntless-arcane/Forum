@@ -1,15 +1,66 @@
-import { Filter } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { Filter, Loader2 } from 'lucide-react';
+import { useEffect, useState } from 'react';
 import QuestionCard from '../components/QuestionCard';
 import SearchBar from '../components/SearchBar';
 import TagChip from '../components/TagChip';
-import { questions, tags, users } from '../mockData';
+import { questions as questionApi } from '../services/api';
+import { Question } from '../types';
+import { tags } from '../mockData'; // Keep tags from mock for now or fetch from API if available (API has no tags endpoint documented in provided snippets, oh wait, it does: GET /api/tags)
 
 export default function Explore() {
+  const [questions, setQuestions] = useState<Question[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [sortBy, setSortBy] = useState<'latest' | 'unanswered'>('latest');
   const [showFilters, setShowFilters] = useState(false);
+
+  // Fetch questions on mount and when filters change
+  useEffect(() => {
+    const fetchQuestions = async () => {
+      setLoading(true);
+      try {
+        const params: any = {
+          search: searchQuery || undefined,
+          status: sortBy === 'unanswered' ? 'pending' : undefined,
+          sort: sortBy === 'latest' ? 'newest' : undefined,
+          // API doesn't support array of tags, just single tag for now based on code reading?
+          // Backend code: if (tag) filter.tags = tag; -> suggests single tag filter.
+          // We can filter client side for multiple tags or just pass one.
+          // Let's filter client side for complex tag logic if needed, or just fetch all.
+          // Actually, let's fetch all (paginated) for now or pass parameters.
+        };
+
+        // If multiple tags, we might need to filter client side or make multiple requests.
+        // For now let's just use the search param.
+
+        const { data } = await questionApi.getAll(params);
+        let fetchedQuestions = data.questions;
+
+        // Client-side filtering for multiple tags if needed
+        if (selectedTags.length > 0) {
+          fetchedQuestions = fetchedQuestions.filter((q: Question) =>
+            q.tags.some(tag => selectedTags.includes(tag))
+          );
+        }
+
+        setQuestions(fetchedQuestions);
+      } catch (err) {
+        setError('Failed to load questions');
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    // Debounce search
+    const timeoutId = setTimeout(() => {
+      fetchQuestions();
+    }, 500);
+
+    return () => clearTimeout(timeoutId);
+  }, [searchQuery, sortBy, selectedTags]);
 
   const toggleTag = (tag: string) => {
     setSelectedTags((prev) =>
@@ -17,43 +68,19 @@ export default function Explore() {
     );
   };
 
-  const filteredQuestions = useMemo(() => {
-    let filtered = [...questions];
+  // Group tags (still using mock tags for categories as backend tags endpoint might just return list)
+  // Logic to group tags needs to be preserved or fetched.
+  // Backend GET /api/tags exists? 
+  // checking backend server.js -> app.use('/api/tags', tagRoutes);
+  // checking backend routes/tags.js -> likely returns tags.
 
-    if (searchQuery) {
-      filtered = filtered.filter(
-        (q) =>
-          q.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          q.description.toLowerCase().includes(searchQuery.toLowerCase())
-      );
-    }
-
-    if (selectedTags.length > 0) {
-      filtered = filtered.filter((q) =>
-        q.tags.some((tag) => selectedTags.includes(tag))
-      );
-    }
-
-    if (sortBy === 'latest') {
-      filtered.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-    } else if (sortBy === 'unanswered') {
-      filtered = filtered.filter((q) => q.status === 'pending');
-    }
-
-    return filtered;
-  }, [searchQuery, selectedTags, sortBy]);
-
-  const groupedTags = useMemo(() => {
-    const grouped: Record<string, string[]> = {
-      psychology: [],
-      corporate: [],
-      industry: [],
-    };
-    tags.forEach((tag) => {
-      grouped[tag.category].push(tag.name);
-    });
-    return grouped;
-  }, []);
+  // For now, let's reuse the mock tags for the UI structure to keep it simple, 
+  // but eventually we should fetch them.
+  const groupedTags = {
+    psychology: tags.filter(t => t.category === 'psychology').map(t => t.name),
+    corporate: tags.filter(t => t.category === 'corporate').map(t => t.name),
+    industry: tags.filter(t => t.category === 'industry').map(t => t.name),
+  };
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -145,19 +172,27 @@ export default function Explore() {
       )}
 
       <div className="space-y-6">
-        {filteredQuestions.length === 0 ? (
+        {loading ? (
+          <div className="flex justify-center py-12">
+            <Loader2 className="w-8 h-8 animate-spin text-indigo-600" />
+          </div>
+        ) : error ? (
+          <div className="text-center py-12 text-red-500">
+            {error}
+          </div>
+        ) : questions.length === 0 ? (
           <div className="text-center py-12">
             <p className="text-gray-600 dark:text-slate-400">No questions found matching your criteria.</p>
           </div>
         ) : (
-          filteredQuestions.map((question) => {
-            const author = users.find((u) => u.id === question.userId)!;
-            return (
-                <div key={question.id} className="mb-4">
-                  <QuestionCard question={question} author={author} />
-                </div>
-              );
-          })
+          questions.map((question) => (
+            <div key={question.id} className="mb-4">
+              <QuestionCard
+                question={question}
+                author={question.user || { id: 'unknown', name: 'Anonymous', avatar: '👤', role: 'student' }}
+              />
+            </div>
+          ))
         )}
       </div>
     </div>

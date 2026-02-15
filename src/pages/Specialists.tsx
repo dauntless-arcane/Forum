@@ -1,15 +1,29 @@
-import { CheckCircle } from "lucide-react";
-import { useMemo, useState } from "react";
-import { users } from "../mockData";
+import { CheckCircle, Loader2 } from "lucide-react";
+import { useMemo, useState, useEffect } from "react";
+import { users as userApi } from "../services/api";
+import { User } from "../types";
 
 export default function Specialists() {
+  const [specialists, setSpecialists] = useState<User[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [selectedProfession, setSelectedProfession] = useState<string>("all");
 
-  // Get only specialists
-  const specialists = useMemo(
-    () => users.filter((u) => u.role === "specialist"),
-    []
-  );
+  useEffect(() => {
+    const fetchSpecialists = async () => {
+      setLoading(true);
+      try {
+        const { data } = await userApi.getSpecialists();
+        setSpecialists(data);
+      } catch (err) {
+        console.error("Failed to fetch specialists:", err);
+        setError("Failed to load specialists");
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchSpecialists();
+  }, []);
 
   // Extract professions safely (remove undefined/null)
   const professions = useMemo(() => {
@@ -25,8 +39,16 @@ export default function Specialists() {
     selectedProfession === "all"
       ? specialists
       : specialists.filter(
-          (s) => s.profession === selectedProfession
-        );
+        (s) => s.profession === selectedProfession
+      );
+
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center min-h-[50vh]">
+        <Loader2 className="w-8 h-8 animate-spin text-indigo-600" />
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-8">
@@ -41,22 +63,29 @@ export default function Specialists() {
         </p>
       </div>
 
+      {error && (
+        <div className="mb-6 p-4 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 rounded-lg">
+          {error}
+        </div>
+      )}
+
       {/* Profession Filter */}
-      <div className="flex flex-wrap gap-3 mb-8">
-        {professions.map((profession) => (
-          <button
-            key={profession}
-            onClick={() => setSelectedProfession(profession)}
-            className={`px-4 py-2 rounded-lg capitalize transition ${
-              selectedProfession === profession
-                ? "bg-accent text-primary"
-                : "bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700"
-            }`}
-          >
-            {profession}
-          </button>
-        ))}
-      </div>
+      {professions.length > 1 && (
+        <div className="flex flex-wrap gap-3 mb-8">
+          {professions.map((profession) => (
+            <button
+              key={profession}
+              onClick={() => setSelectedProfession(profession)}
+              className={`px-4 py-2 rounded-lg capitalize transition ${selectedProfession === profession
+                  ? "bg-accent text-primary"
+                  : "bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700"
+                }`}
+            >
+              {profession}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Specialists Grid */}
       {filteredSpecialists.length === 0 ? (
@@ -71,7 +100,7 @@ export default function Specialists() {
               className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl p-6 shadow-sm hover:shadow-md transition"
             >
               <div className="flex items-center gap-3 mb-4">
-                <span className="text-3xl">{specialist.avatar}</span>
+                <span className="text-3xl">{specialist.avatar || '👤'}</span>
 
                 <div>
                   <h3 className="font-semibold text-gray-900 dark:text-slate-100 flex items-center gap-2">

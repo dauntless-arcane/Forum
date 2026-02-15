@@ -33,7 +33,7 @@ export default function QuestionCard({ question, author }: QuestionCardProps) {
               {question.description}
             </p>
             <div className="flex flex-wrap gap-2 mb-3">
-              {question.tags.map((tag) => (
+              {(question.tags || []).map((tag) => (
                 <TagChip key={tag} tag={tag} />
               ))}
             </div>
@@ -49,18 +49,17 @@ export default function QuestionCard({ question, author }: QuestionCardProps) {
           <div className="flex flex-col items-end gap-4 text-sm text-gray-600 dark:text-slate-400">
             <div className="flex items-center gap-1">
               <MessageSquare size={16} />
-              <span>{question.answers.length}</span>
+              <span>{question.answerCount ?? question.answers?.length ?? 0}</span>
             </div>
             <div className="flex items-center gap-1">
               <Eye size={16} />
               <span>{question.views}</span>
             </div>
             <span
-              className={`px-2 py-1 rounded text-xs font-medium ${
-                question.status === 'answered'
+              className={`px-2 py-1 rounded text-xs font-medium ${question.status === 'answered'
                   ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
                   : 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400'
-              }`}
+                }`}
             >
               {question.status === 'answered' ? 'Answered' : 'Pending'}
             </span>
