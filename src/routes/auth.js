@@ -267,7 +267,7 @@ router.post('/bulk-create', authenticate, authorize('admin'), async (req, res) =
 
         res.status(201).json({
             message: `Created ${results.length} users. ${failed.length} failed.`,
-            created: results,
+            users: results,
             failed,
         });
     } catch (err) {

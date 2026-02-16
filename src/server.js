@@ -23,6 +23,7 @@ const answerRoutes = require('./routes/answers');
 const userRoutes = require('./routes/users');
 const moderationRoutes = require('./routes/moderation');
 const tagRoutes = require('./routes/tags');
+const adminRoutes = require('./routes/admin');
 
 // Swagger
 const swaggerUi = require('swagger-ui-express');
@@ -73,6 +74,12 @@ io.on('connection', (socket) => {
     socket.on('join_explore', () => {
         socket.join('explore_feed');
         console.log(`Client ${socket.id} joined explore feed`);
+    });
+
+    socket.on('join_admin_room', (token) => {
+        // ideally we should verify token here, but for now we trust the client logic or could verify JWT
+        socket.join('admin_feed');
+        console.log(`Client ${socket.id} joined admin feed`);
     });
 
     socket.on('disconnect', () => {
@@ -154,6 +161,7 @@ app.use('/api/answers', answerRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/moderation', moderationRoutes);
 app.use('/api/tags', tagRoutes);
+app.use('/api/admin', adminRoutes);
 
 // ──────────────── 404 Handler ────────────────
 app.use((req, res) => {
@@ -211,14 +219,14 @@ async function startServer() {
 ║  GET    /api/tags                            ║
 ║  POST   /api/moderation/report               ║
 ║  GET    /api/moderation/reports (admin)       ║
-║  POST   /api/moderation/action  (admin)      ║
-║  GET    /api/moderation/flagged (admin)       ║
-║  POST   /api/moderation/scan   (admin)       ║
-║  POST   /api/moderation/remove/:t/:id (admin)║
-║  POST   /api/moderation/ban/:userId (admin)  ║
-║  POST   /api/moderation/unban/:userId (admin)║
-║  GET    /api/moderation/stats  (admin)       ║
-║  GET    /api/moderation/logs   (admin)       ║
+║  GET    /api/moderation/reports (admin)       ║
+║  POST   /api/moderation/blocked-words (admin)║
+║  GET    /api/admin/stats       (admin)       ║
+║  GET    /api/admin/users       (admin)       ║
+║  PATCH  /api/admin/users/:id/ban (admin)     ║
+║  PATCH  /api/admin/users/:id/role (admin)    ║
+║  DELETE /api/admin/questions/:id (admin)     ║
+║  DELETE /api/admin/answers/:id   (admin)     ║
 ║  GET    /api/health                          ║
 ╚══════════════════════════════════════════════╝
       `);

@@ -130,6 +130,17 @@ router.get('/:id/questions', optionalAuth, async (req, res) => {
         const skip = (pageNum - 1) * limitNum;
 
         const db = getDB();
+
+        // 🔒 Privacy Check: 
+        // Only the user themselves or an Admin can view the list of questions by a specific user.
+        // This preserves the anonymity of the "Anonymous Student" feature.
+        const isOwner = req.user && req.user._id.toString() === id;
+        const isAdmin = req.user && req.user.role === 'admin';
+
+        if (!isOwner && !isAdmin) {
+            return res.status(403).json({ error: 'You are not authorized to view this user\'s question history.' });
+        }
+
         const [questions, total] = await Promise.all([
             db.collection('questions')
                 .find({ userId: id, removed: { $ne: true } })

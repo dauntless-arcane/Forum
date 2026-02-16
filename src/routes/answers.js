@@ -8,6 +8,37 @@ const { moderateContent, cleanText } = require('../middleware/moderation');
 
 const router = express.Router();
 
+
+router.post('/check-upvotes', authenticate, async (req, res) => {
+    try {
+        const { answerIds } = req.body;
+
+        if (!Array.isArray(answerIds) || answerIds.length === 0) {
+            return res.json({ upvotedAnswerIds: [] });
+        }
+
+        const db = getDB();
+        const userId = req.user._id.toString();
+
+        const liked = await db.collection('likes')
+            .find({
+                userId,
+                targetType: 'answer',
+                targetId: { $in: answerIds }
+            })
+            .project({ targetId: 1 })
+            .toArray();
+
+        res.json({
+            upvotedAnswerIds: liked.map(l => l.targetId)
+        });
+
+    } catch (err) {
+        console.error('Check upvotes error:', err);
+        res.status(500).json({ error: 'Failed to check upvotes.' });
+    }
+});
+
 // ──────────────── POST /api/answers/:questionId ────────────────
 router.post('/:questionId', authenticate, authorize('specialist', 'admin'), moderateContent(['content']), async (req, res) => {
     try {
@@ -72,7 +103,10 @@ router.post('/:questionId', authenticate, authorize('specialist', 'admin'), mode
         await cacheDel('questions:*');
 
         // Emit real-time event
-        if (req.io) req.io.to('specialists').emit('new_answer', { ...newAnswer, user: req.user });
+        if (req.io) {
+            req.io.to('specialists').emit('new_answer', { ...newAnswer, user: req.user });
+            req.io.to('admin_feed').emit('admin_new_answer', { ...newAnswer, user: req.user });
+        }
 
         res.status(201).json({
             message: 'Answer posted successfully!',
@@ -97,7 +131,7 @@ router.put('/:id', authenticate, moderateContent(['content']), async (req, res) 
         }
 
         const db = getDB();
-        const answer = await db.collection('answers').findOne({ _id: answerId });
+        const answer = await db.collection('answers').findOne({ _id: answerId, removed: { $ne: true } });
 
         if (!answer) {
             return res.status(404).json({ error: 'Answer not found.' });
@@ -134,7 +168,7 @@ router.delete('/:id', authenticate, async (req, res) => {
         }
 
         const db = getDB();
-        const answer = await db.collection('answers').findOne({ _id: answerId });
+        const answer = await db.collection('answers').findOne({ _id: answerId, removed: { $ne: true } });
 
         if (!answer) {
             return res.status(404).json({ error: 'Answer not found.' });
@@ -185,50 +219,78 @@ router.delete('/:id', authenticate, async (req, res) => {
 });
 
 // ──────────────── POST /api/answers/:id/upvote ────────────────
+
+
+
+// ... (Answer create/update/delete routes) ...
+
+
+// ──────────────── POST /api/answers/:id/upvote ────────────────
 router.post('/:id/upvote', authenticate, async (req, res) => {
     try {
         const { id } = req.params;
-        let answerId;
-        try {
-            answerId = new ObjectId(id);
-        } catch {
-            return res.status(400).json({ error: 'Invalid answer ID.' });
-        }
-
         const db = getDB();
-        const answer = await db.collection('answers').findOne({ _id: answerId });
+
+        const answerId = id; // stored as string in likes
+        const userId = req.user._id.toString();
+
+        const answerObjectId = new ObjectId(id);
+
+        const answer = await db.collection('answers')
+            .findOne({ _id: answerObjectId, removed: { $ne: true } });
 
         if (!answer) {
             return res.status(404).json({ error: 'Answer not found.' });
         }
 
-        const userId = req.user._id.toString();
-        const upvotedBy = answer.upvotedBy || [];
+        const existingLike = await db.collection('likes').findOne({
+            userId,
+            targetId: answerId,
+            targetType: 'answer'
+        });
 
-        if (upvotedBy.includes(userId)) {
-            // Remove upvote (toggle)
-            await db.collection('answers').updateOne(
-                { _id: answerId },
-                {
-                    $pull: { upvotedBy: userId },
-                    $inc: { upvotes: -1 },
-                }
-            );
+        // ───── UNLIKE ─────
+        if (existingLike) {
+
+            await Promise.all([
+                db.collection('likes').deleteOne({ _id: existingLike._id }),
+
+                db.collection('answers').updateOne(
+                    { _id: answerObjectId },
+                    { $inc: { upvotes: -1 } }
+                )
+            ]);
+
             await cacheDel(`question:${answer.questionId}`);
-            return res.json({ message: 'Upvote removed.', upvoted: false });
+
+            return res.json({
+                message: 'Upvote removed.',
+                upvoted: false
+            });
         }
 
-        // Add upvote
-        await db.collection('answers').updateOne(
-            { _id: answerId },
-            {
-                $push: { upvotedBy: userId },
-                $inc: { upvotes: 1 },
-            }
-        );
+        // ───── LIKE ─────
+        await Promise.all([
+            db.collection('likes').insertOne({
+                userId,
+                targetId: answerId,
+                targetType: 'answer',
+                createdAt: new Date()
+            }),
+
+            db.collection('answers').updateOne(
+                { _id: answerObjectId },
+                { $inc: { upvotes: 1 } }
+            )
+        ]);
 
         await cacheDel(`question:${answer.questionId}`);
-        res.json({ message: 'Upvoted!', upvoted: true });
+
+        res.json({
+            message: 'Upvoted!',
+            upvoted: true
+        });
+
     } catch (err) {
         console.error('Upvote error:', err);
         res.status(500).json({ error: 'Failed to upvote.' });
@@ -248,7 +310,7 @@ router.post('/:id/best', authenticate, async (req, res) => {
         }
 
         const db = getDB();
-        const answer = await db.collection('answers').findOne({ _id: answerId });
+        const answer = await db.collection('answers').findOne({ _id: answerId, removed: { $ne: true } });
 
         if (!answer) {
             return res.status(404).json({ error: 'Answer not found.' });

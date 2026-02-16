@@ -119,4 +119,45 @@ router.get('/reports', authenticate, authorize('admin'), async (req, res) => {
     }
 });
 
+// ──────────────── PATCH /api/moderation/reports/:id ────────────────
+router.patch('/reports/:id', authenticate, authorize('admin'), async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { status } = req.body;
+
+        if (!['resolved', 'dismissed', 'pending'].includes(status)) {
+            return res.status(400).json({ error: 'Invalid status.' });
+        }
+
+        const { ObjectId } = require('mongodb');
+        let reportId;
+        try {
+            reportId = new ObjectId(id);
+        } catch {
+            return res.status(400).json({ error: 'Invalid report ID.' });
+        }
+
+        const db = getDB();
+        const result = await db.collection('reports').updateOne(
+            { _id: reportId },
+            {
+                $set: {
+                    status,
+                    resolvedAt: new Date(),
+                    resolvedBy: req.user._id.toString()
+                }
+            }
+        );
+
+        if (result.matchedCount === 0) {
+            return res.status(404).json({ error: 'Report not found.' });
+        }
+
+        res.json({ message: `Report marked as ${status}.` });
+    } catch (err) {
+        console.error('Update report status error:', err);
+        res.status(500).json({ error: 'Failed to update report status.' });
+    }
+});
+
 module.exports = router;

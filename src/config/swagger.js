@@ -66,6 +66,11 @@ Most endpoints require a Bearer Token. Login to get one, then click **Authorize*
                             example: ['Anxiety']
                         },
                         verified: { type: 'boolean', example: true },
+                        upvotedAnswers: {
+                            type: 'array',
+                            items: { type: 'string' },
+                            description: 'List of answer IDs upvoted by this user'
+                        },
                         banned: { type: 'boolean', example: false },
                         _links: {
                             type: 'object',
@@ -145,6 +150,7 @@ Most endpoints require a Bearer Token. Login to get one, then click **Authorize*
             { name: 'Moderation', description: 'Admin tools for content safety, reporting, and banning' },
             { name: 'Tags', description: 'Taxonomy for questions' },
             { name: 'Socket.IO', description: 'Real-time event documentation' },
+            { name: 'Admin', description: 'Dashboard stats and user management' },
         ],
         paths: {
             '/auth/signup': {
@@ -274,6 +280,7 @@ Most endpoints require a Bearer Token. Login to get one, then click **Authorize*
                         { name: 'status', in: 'query', description: 'Filter by status', schema: { type: 'string', enum: ['pending', 'answered'] } },
                         { name: 'sort', in: 'query', description: 'Sort order', schema: { type: 'string', enum: ['newest', 'oldest', 'popular', 'unanswered'] } },
                         { name: 'search', in: 'query', description: 'Full-text search on title and description', schema: { type: 'string' } },
+                        { name: 'includeRemoved', in: 'query', description: 'Admin only: Set to true to see soft-deleted questions', schema: { type: 'boolean' } },
                     ],
                     security: [],
                     responses: {
@@ -399,6 +406,22 @@ Most endpoints require a Bearer Token. Login to get one, then click **Authorize*
                     responses: { 200: { description: 'Upvote toggled (returns new status)' } },
                 },
             },
+
+            '/answers/check-upvotes': {
+                post: {
+                    tags: ['Answers'],
+                    summary: 'Check upvote status',
+                    description: 'Send a list of answer IDs (max 100) to check if the current user has upvoted them. This avoids caching user-specific data in the main feed.',
+                    security: [{ bearerAuth: [] }],
+                    requestBody: {
+                        required: true,
+                        content: { 'application/json': { schema: { type: 'object', required: ['answerIds'], properties: { answerIds: { type: 'array', items: { type: 'string' } } } } } }
+                    },
+                    responses: {
+                        200: { description: 'List of upvoted answer IDs', content: { 'application/json': { schema: { type: 'object', properties: { upvotedAnswerIds: { type: 'array', items: { type: 'string' } } } } } } }
+                    }
+                }
+            },
             '/answers/{id}/best': {
                 post: {
                     tags: ['Answers'],
@@ -448,6 +471,24 @@ Most endpoints require a Bearer Token. Login to get one, then click **Authorize*
                     },
                     responses: { 201: { description: 'Report submitted successfully' } },
                 },
+            },
+            '/moderation/reports/{id}': {
+                patch: {
+                    tags: ['Moderation'],
+                    summary: 'Update report status (Admin only)',
+                    description: 'Mark a report as resolved or dismissed.',
+                    security: [{ bearerAuth: [] }],
+                    parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+                    requestBody: {
+                        required: true,
+                        content: { 'application/json': { schema: { type: 'object', properties: { status: { type: 'string', enum: ['resolved', 'dismissed', 'pending'] } } } } }
+                    },
+                    responses: {
+                        200: { description: 'Report status updated' },
+                        400: { description: 'Invalid status' },
+                        404: { description: 'Report not found' }
+                    }
+                }
             },
             '/moderation/reports': {
                 get: {
@@ -499,6 +540,83 @@ Most endpoints require a Bearer Token. Login to get one, then click **Authorize*
                     responses: { 200: { description: 'List of tags' } },
                 },
             },
+            '/admin/stats': {
+                get: {
+                    tags: ['Admin'],
+                    summary: 'Get dashboard statistics',
+                    description: 'Returns counts of users, new posts, pending reports, etc. for the admin dashboard.',
+                    security: [{ bearerAuth: [] }],
+                    responses: {
+                        200: {
+                            description: 'Dashboard stats',
+                            content: { 'application/json': { schema: { type: 'object', properties: { totalUsers: { type: 'integer' }, newPosts: { type: 'integer' }, pendingReports: { type: 'integer' }, specialistsCount: { type: 'integer' } } } } }
+                        },
+                        403: { description: 'Admin access required' }
+                    }
+                }
+            },
+            '/admin/users': {
+                get: {
+                    tags: ['Admin'],
+                    summary: 'Manage users',
+                    description: 'List users with pagination, filtering by role, and search capabilities.',
+                    security: [{ bearerAuth: [] }],
+                    parameters: [
+                        { name: 'page', in: 'query', schema: { type: 'integer', default: 1 } },
+                        { name: 'limit', in: 'query', schema: { type: 'integer', default: 20 } },
+                        { name: 'search', in: 'query', schema: { type: 'string' }, description: 'Search by name or email' },
+                        { name: 'role', in: 'query', schema: { type: 'string', enum: ['student', 'specialist', 'admin'] } }
+                    ],
+                    responses: {
+                        200: { description: 'List of users' },
+                        403: { description: 'Admin access required' }
+                    }
+                }
+            },
+            '/admin/users/{id}/ban': {
+                patch: {
+                    tags: ['Admin'],
+                    summary: 'Ban or unban user',
+                    description: 'Update the banned status of a user.',
+                    parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+                    security: [{ bearerAuth: [] }],
+                    requestBody: {
+                        required: true,
+                        content: { 'application/json': { schema: { type: 'object', required: ['banned'], properties: { banned: { type: 'boolean' }, reason: { type: 'string' } } } } }
+                    },
+                    responses: { 200: { description: 'User ban status updated' } }
+                }
+            },
+            '/admin/users/{id}/role': {
+                patch: {
+                    tags: ['Admin'],
+                    summary: 'Change user role',
+                    description: 'Promote or demote a user.',
+                    parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+                    security: [{ bearerAuth: [] }],
+                    requestBody: {
+                        required: true,
+                        content: { 'application/json': { schema: { type: 'object', required: ['role'], properties: { role: { type: 'string', enum: ['student', 'specialist', 'admin'] } } } } }
+                    },
+                    responses: { 200: { description: 'User role updated' } }
+                }
+            },
+            '/admin/questions/{id}': {
+                delete: {
+                    tags: ['Admin'],
+                    summary: 'Force delete question',
+                    description: 'Admin override to soft-delete any question.',
+                    parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+                    security: [{ bearerAuth: [] }],
+                    responses: { 200: { description: 'Question deleted' } }
+                }
+            },
+            '/admin/answers/{id}': {
+                delete: {
+                    tags: ['Admin'],
+                    responses: { 200: { description: 'Answer deleted' } }
+                }
+            },
         },
         'x-socketio-events': {
             summary: 'Real-time WebSocket Events',
@@ -529,6 +647,27 @@ Most endpoints require a Bearer Token. Login to get one, then click **Authorize*
                     subscribe: {
                         summary: 'Server -> Client: New Answer',
                         description: 'Broadcasted to "specialists" room when a user posts a new answer.',
+                        message: { payload: { $ref: '#/components/schemas/Answer' } },
+                    },
+                },
+                'join_admin_room': {
+                    publish: {
+                        summary: 'Client -> Server: Join Admin Room',
+                        description: 'Subscribe to updates for the admin dashboard (all new posts, even non-anonymized).',
+                        example: 'socket.emit("join_admin_room", token);'
+                    },
+                },
+                'admin_new_question': {
+                    subscribe: {
+                        summary: 'Server -> Client: New Question (Admin)',
+                        description: 'Broadcasted to "admin_feed" room. Contains full user details.',
+                        message: { payload: { $ref: '#/components/schemas/Question' } },
+                    },
+                },
+                'admin_new_answer': {
+                    subscribe: {
+                        summary: 'Server -> Client: New Answer (Admin)',
+                        description: 'Broadcasted to "admin_feed" room. Contains full user details.',
                         message: { payload: { $ref: '#/components/schemas/Answer' } },
                     },
                 },
