@@ -1,5 +1,6 @@
-import { useState, useEffect } from "react";
-import { Loader2 } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { Loader2, Bell } from "lucide-react";
+import io from 'socket.io-client';
 import { questions as questionApi, answers as answerApi } from "../services/api";
 import { useAuth } from "../context/AuthContext";
 import { Question } from "../types";
@@ -13,12 +14,41 @@ export default function SpecialistDashboard() {
   const [filter, setFilter] = useState<"all" | "pending" | "answered">("pending");
   const [replyContent, setReplyContent] = useState<{ [key: string]: string }>({});
   const [submitting, setSubmitting] = useState<{ [key: string]: boolean }>({});
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
+  const [newUpdate, setNewUpdate] = useState(false);
 
-  const fetchQuestions = async () => {
-    setLoading(true);
+  // Socket connection
+  useEffect(() => {
+    const socket = io(import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:5000');
+
+    socket.on('connect', () => {
+      console.log('Specialist connected to socket');
+      socket.emit('join_specialist_room');
+    });
+
+    socket.on('new_question', (question: Question) => {
+      // If we are looking at pending or all, we can prepend it
+      if (filter !== 'answered') {
+        setQuestions(prev => [question, ...prev]);
+        setNewUpdate(true);
+        // Auto-hide notification after 3s
+        setTimeout(() => setNewUpdate(false), 3000);
+      }
+    });
+
+    return () => {
+      socket.disconnect();
+    };
+  }, [filter]);
+
+  const fetchQuestions = async (pageNumber = 1, shouldAppend = false) => {
+    if (pageNumber === 1) setLoading(true);
+
     try {
       const params: any = {
-        limit: 50, // Fetch a batch
+        limit: 20,
+        page: pageNumber,
         sort: 'newest'
       };
       if (filter !== 'all') {
@@ -26,7 +56,15 @@ export default function SpecialistDashboard() {
       }
 
       const { data } = await questionApi.getAll(params);
-      setQuestions(data.questions);
+
+      const newQuestions = data.questions;
+      if (shouldAppend) {
+        setQuestions(prev => [...prev, ...newQuestions]);
+      } else {
+        setQuestions(newQuestions);
+      }
+
+      setHasMore(newQuestions.length === 20); // Basic check, ideally backend returns 'totalPages' or 'hasMore'
     } catch (err) {
       console.error("Failed to fetch questions:", err);
       setError("Failed to load questions");
@@ -36,8 +74,15 @@ export default function SpecialistDashboard() {
   };
 
   useEffect(() => {
-    fetchQuestions();
+    setPage(1);
+    fetchQuestions(1, false);
   }, [filter]);
+
+  const handleLoadMore = () => {
+    const nextPage = page + 1;
+    setPage(nextPage);
+    fetchQuestions(nextPage, true);
+  };
 
   const handleReply = async (questionId: string) => {
     const content = replyContent[questionId];
@@ -114,6 +159,14 @@ export default function SpecialistDashboard() {
         </div>
       )}
 
+      {/* New Questions Notification */}
+      {newUpdate && (
+        <div className="mb-6 p-4 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-lg flex items-center gap-3 animate-bounce">
+          <Bell size={20} />
+          <span className="font-medium">New questions have arrived! The list has been updated.</span>
+        </div>
+      )}
+
       {/* Questions Sheet */}
       {questions.length === 0 ? (
         <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl p-10 text-center text-gray-600 dark:text-slate-400">
@@ -180,6 +233,18 @@ export default function SpecialistDashboard() {
               </button>
             </div>
           ))}
+
+          {/* Load More Button */}
+          {hasMore && (
+            <div className="flex justify-center mt-8 pb-8">
+              <button
+                onClick={handleLoadMore}
+                className="px-6 py-2 bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-slate-300 rounded-lg hover:bg-gray-200 dark:hover:bg-slate-600 transition font-medium"
+              >
+                Load More
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>

@@ -1,7 +1,7 @@
 export interface User {
   id: string;
   name: string;
-  role: 'student' | 'specialist';
+  role: 'student' | 'specialist' | 'admin';
   avatar: string;
   email?: string; // Populated by backend
 
@@ -9,6 +9,8 @@ export interface User {
   profession?: string;
   expertise?: string[];
   verified?: boolean;
+  upvotedAnswers?: string[];
+  banned?: boolean;
 }
 
 
@@ -20,8 +22,11 @@ export interface Answer {
   user?: User; // Populated by backend
   content: string;
   upvotes: number;
+  upvotedBy?: string[]; // List of user IDs who upvoted
   createdAt: string;
   isBest: boolean;
+  isLikedByMe: boolean;
+
 }
 
 export interface Question {

@@ -23,7 +23,7 @@ export default function QuestionCard({ question, author }: QuestionCardProps) {
 
   return (
     <Link to={`/question/${question.id}`}>
-      <div className="bg-white dark:bg-slate-800 border border-beige/30 dark:border-slate-700 rounded-lg p-5 hover:shadow-lg transition-shadow">
+      <div className="bg-white dark:bg-slate-800 border border-beige/30 dark:border-slate-700 rounded-lg p-5 hover:shadow-xl hover:border-blue-400 dark:hover:border-blue-500 transition-all duration-300 transform hover:-translate-y-1">
         <div className="flex items-start justify-between gap-4">
           <div className="flex-1 min-w-0">
             <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-100 mb-2 hover:text-secondary transition-colors">
@@ -57,8 +57,8 @@ export default function QuestionCard({ question, author }: QuestionCardProps) {
             </div>
             <span
               className={`px-2 py-1 rounded text-xs font-medium ${question.status === 'answered'
-                  ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
-                  : 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400'
+                ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+                : 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400'
                 }`}
             >
               {question.status === 'answered' ? 'Answered' : 'Pending'}

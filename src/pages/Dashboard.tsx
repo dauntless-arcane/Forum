@@ -116,7 +116,7 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 animate-fade-in-up">
 
       {/* Header */}
       <div className="mb-10">
@@ -162,8 +162,8 @@ export default function Dashboard() {
               key={tab}
               onClick={() => setFilter(tab as any)}
               className={`px-4 py-2 rounded-md capitalize transition-all ${filter === tab
-                  ? 'bg-accent text-primary'
-                  : 'text-gray-900 dark:text-slate-100 hover:bg-accent'
+                ? 'bg-accent text-primary'
+                : 'text-gray-900 dark:text-slate-100 hover:bg-accent'
                 }`}
             >
               {tab}

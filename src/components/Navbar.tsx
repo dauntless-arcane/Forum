@@ -87,6 +87,15 @@ export default function Navbar({ darkMode, toggleDarkMode }: NavbarProps) {
               </Link>
             )}
 
+            {user?.role === 'admin' && (
+              <Link
+                to="/admin"
+                className={isActive("/admin") ? "text-accent" : "hover:text-accent"}
+              >
+                Admin Panel
+              </Link>
+            )}
+
             <button
               onClick={toggleDarkMode}
               className="p-2 rounded-lg hover:bg-secondary/30"
@@ -169,6 +178,16 @@ export default function Navbar({ darkMode, toggleDarkMode }: NavbarProps) {
                 className="block"
               >
                 Specialist Panel
+              </Link>
+            )}
+
+            {user?.role === 'admin' && (
+              <Link
+                to="/admin"
+                onClick={() => setMobileOpen(false)}
+                className="block"
+              >
+                Admin Panel
               </Link>
             )}
 

@@ -23,6 +23,32 @@ export default function QuestionDetail() {
       setLoading(true);
       try {
         const { data } = await questionApi.getById(id);
+
+        // If user is logged in, check which answers they have upvoted
+        // If user is logged in, check which answers they have upvoted via API
+        if (currentUser && data.answers && data.answers.length > 0) {
+          try {
+            const answerIds = data.answers.map((a: any) => a.id);
+            const { data: responseData } = await answerApi.checkUpvoted(answerIds);
+            const upvotedIds = responseData.upvotedAnswerIds || [];
+
+            // Merge this info into the answers
+            data.answers = data.answers.map((a: any) => ({
+              ...a,
+              upvotedBy: upvotedIds.includes(a.id) ? [currentUser.id] : []
+            }));
+          } catch (upvoteError) {
+            console.error("Failed to check upvotes", upvoteError);
+            // Fallback to local user data if API fails
+            if (currentUser.upvotedAnswers) {
+              data.answers = data.answers.map((a: any) => ({
+                ...a,
+                upvotedBy: currentUser.upvotedAnswers?.includes(a.id) ? [currentUser.id] : []
+              }));
+            }
+          }
+        }
+
         setQuestion(data);
       } catch (err: any) {
         if (err.response?.status === 404) {
@@ -36,7 +62,7 @@ export default function QuestionDetail() {
       }
     };
     fetchQuestion();
-  }, [id]);
+  }, [id, currentUser]);
 
   const handleSubmitAnswer = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -59,15 +85,42 @@ export default function QuestionDetail() {
   };
 
   const handleUpvote = async (answerId: string) => {
+    if (!currentUser || !question) return;
+
+    // Optimistically update UI
+    setQuestion((prev) => {
+      if (!prev) return null;
+      return {
+        ...prev,
+        answers: prev.answers?.map((a) => {
+          if (a.id === answerId) {
+            const hasUpvoted = a.upvotedBy?.includes(currentUser.id);
+            const newUpvotedBy = hasUpvoted
+              ? a.upvotedBy?.filter((id) => id !== currentUser.id)
+              : [...(a.upvotedBy || []), currentUser.id];
+
+            return {
+              ...a,
+              upvotes: hasUpvoted ? a.upvotes - 1 : a.upvotes + 1,
+              upvotedBy: newUpvotedBy
+            };
+          }
+          return a;
+        })
+      };
+    });
+
     try {
       await answerApi.upvote(answerId);
-      // Refresh
-      if (id) {
-        const { data: updatedQuestion } = await questionApi.getById(id);
-        setQuestion(updatedQuestion);
-      }
+      // We can rely on optimistic update since backend might not return 'upvotedBy' properly yet
+      // If we re-fetch immediately and backend lacks data, it will flicker back to unliked.
+      // So we skip re-fetching here for a smoother experience, assuming successful call.
+
     } catch (err) {
       console.error("Failed to upvote:", err);
+      // Revert optimistic update on error (optional, but good practice)
+      const { data: revertedQuestion } = await questionApi.getById(id!);
+      setQuestion(revertedQuestion);
     }
   };
 
@@ -105,7 +158,7 @@ export default function QuestionDetail() {
   const author = question.user || { id: 'unknown', name: 'Anonymous', avatar: '👤', role: 'student' as const };
 
   return (
-    <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8 animate-fade-in-up">
       <button
         onClick={() => navigate(-1)}
         className="flex items-center gap-2 text-secondary dark:text-soft hover:underline mb-6"
@@ -160,6 +213,7 @@ export default function QuestionDetail() {
                   key={answer.id}
                   answer={answer}
                   author={answerAuthor}
+                  currentUserId={currentUser?.id}
                   onUpvote={() => handleUpvote(answer.id)}
                 />
               );

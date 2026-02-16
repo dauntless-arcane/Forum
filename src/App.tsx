@@ -7,6 +7,7 @@ import Dashboard from './pages/Dashboard';
 import Explore from './pages/Explore';
 import QuestionDetail from './pages/QuestionDetail';
 import SpecialistDashboard from "./pages/SpecialistDashboard";
+import AdminDashboard from "./pages/AdminDashboard";
 import Specialists from "./pages/Specialists";
 import Login from './pages/Login';
 import Signup from './pages/Signup';
@@ -43,6 +44,7 @@ function App() {
             <Route path="/specialist-panel" element={<SpecialistDashboard />} />
             <Route path="/login" element={<Login />} />
             <Route path="/signup" element={<Signup />} />
+            <Route path="/admin" element={<AdminDashboard />} />
             <Route path="/profile" element={<Profile />} />
           </Routes>
         </div>

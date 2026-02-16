@@ -40,12 +40,38 @@ export const answers = {
   create: (questionId: string, data: any) => api.post(`/answers/${questionId}`, data),
   upvote: (id: string) => api.post(`/answers/${id}/upvote`),
   markBest: (id: string) => api.post(`/answers/${id}/best`),
+  checkUpvoted: (answerIds: string[]) => api.post(`/answers/check-upvotes`, { answerIds }),
 };
 
 export const users = {
   getById: (id: string) => api.get(`/users/${id}`),
   updateProfile: (data: any) => api.put('/users/profile', data),
   getSpecialists: () => api.get('/users/specialists'),
+  getAll: (params?: any) => api.get('/users', { params }), // Optimistic
+};
+
+export const admin = {
+  getStats: () => api.get('/moderation/stats'), // Updated to real endpoint
+  getReports: (status = 'pending') => api.get('/moderation/reports', { params: { status } }),
+  getBlockedWords: () => api.get('/moderation/blocked-words'),
+  addBlockedWords: (words: string[]) => api.post('/moderation/blocked-words', { words }),
+  removeBlockedWord: (word: string) => api.delete(`/moderation/blocked-words/${word}`),
+  bulkCreateUsers: (users: any[]) => api.post('/auth/bulk-create', { users }),
+
+  // New Moderation Endpoints
+  takeAction: (data: any) => api.post('/moderation/action', data),
+  getFlaggedContent: () => api.get('/moderation/flagged'),
+  scanContent: (content: string) => api.post('/moderation/scan', { content }),
+  removeItem: (type: string, id: string) => api.post(`/moderation/remove/${type}/${id}`),
+  banUser: (userId: string) => api.post(`/moderation/ban/${userId}`),
+  unbanUser: (userId: string) => api.post(`/moderation/unban/${userId}`),
+  getSystemStats: () => api.get('/moderation/stats'),
+  getLogs: () => api.get('/moderation/logs'),
+  checkHealth: () => api.get('/health'),
+};
+
+export const tags = {
+  getAll: () => api.get('/tags'),
 };
 
 export default api;

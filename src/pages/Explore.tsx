@@ -1,4 +1,4 @@
-import { Filter, Loader2 } from 'lucide-react';
+import { Filter, Loader2, Bell } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import QuestionCard from '../components/QuestionCard';
 import SearchBar from '../components/SearchBar';
@@ -6,6 +6,8 @@ import TagChip from '../components/TagChip';
 import { questions as questionApi } from '../services/api';
 import { Question } from '../types';
 import { tags } from '../mockData'; // Keep tags from mock for now or fetch from API if available (API has no tags endpoint documented in provided snippets, oh wait, it does: GET /api/tags)
+
+import io from 'socket.io-client';
 
 export default function Explore() {
   const [questions, setQuestions] = useState<Question[]>([]);
@@ -16,51 +18,89 @@ export default function Explore() {
   const [sortBy, setSortBy] = useState<'latest' | 'unanswered'>('latest');
   const [showFilters, setShowFilters] = useState(false);
 
-  // Fetch questions on mount and when filters change
-  useEffect(() => {
-    const fetchQuestions = async () => {
-      setLoading(true);
-      try {
-        const params: any = {
-          search: searchQuery || undefined,
-          status: sortBy === 'unanswered' ? 'pending' : undefined,
-          sort: sortBy === 'latest' ? 'newest' : undefined,
-          // API doesn't support array of tags, just single tag for now based on code reading?
-          // Backend code: if (tag) filter.tags = tag; -> suggests single tag filter.
-          // We can filter client side for multiple tags or just pass one.
-          // Let's filter client side for complex tag logic if needed, or just fetch all.
-          // Actually, let's fetch all (paginated) for now or pass parameters.
-        };
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
+  const [newUpdate, setNewUpdate] = useState(false);
 
-        // If multiple tags, we might need to filter client side or make multiple requests.
-        // For now let's just use the search param.
+  // Consolidated fetch function
+  const fetchQuestions = async (pageNumber = 1, append = false) => {
+    if (pageNumber === 1) setLoading(true);
+    try {
+      const params: any = {
+        limit: 20,
+        page: pageNumber,
+        search: searchQuery || undefined,
+        status: sortBy === 'unanswered' ? 'pending' : undefined,
+        sort: sortBy === 'latest' ? 'newest' : undefined,
+      };
 
-        const { data } = await questionApi.getAll(params);
-        let fetchedQuestions = data.questions;
+      const { data: questionsData } = await questionApi.getAll(params);
+      let fetchedQuestions = questionsData.questions || [];
 
-        // Client-side filtering for multiple tags if needed
-        if (selectedTags.length > 0) {
-          fetchedQuestions = fetchedQuestions.filter((q: Question) =>
-            q.tags.some(tag => selectedTags.includes(tag))
-          );
-        }
-
-        setQuestions(fetchedQuestions);
-      } catch (err) {
-        setError('Failed to load questions');
-        console.error(err);
-      } finally {
-        setLoading(false);
+      // Client-side tag filter (since API might not support multi-tag filtering efficiently yet, or assumes OR)
+      // If API supports ?tag=A,B then use that. Here we stick to established pattern.
+      if (selectedTags.length > 0) {
+        fetchedQuestions = fetchedQuestions.filter((q: Question) =>
+          q.tags.some(tag => selectedTags.includes(tag))
+        );
       }
-    };
 
-    // Debounce search
+      if (append) {
+        setQuestions(prev => [...prev, ...fetchedQuestions]);
+      } else {
+        setQuestions(fetchedQuestions);
+      }
+
+      setHasMore(fetchedQuestions.length === 20);
+
+    } catch (err) {
+      setError('Failed to load data');
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Socket connection
+  useEffect(() => {
+    const socket = io(import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:5000');
+
+    socket.on('connect', () => {
+      console.log('Explore connected to socket');
+      socket.emit('join_explore');
+    });
+
+    socket.on('new_question', (question: Question) => {
+      // Only show new questions if no search/filters are active to strictly match "Feed" behavior
+      // Or show them anyway if they match criteria. 
+      // For simplicity, we just add them if we are in "latest" mode.
+      if (sortBy === 'latest' && !searchQuery) {
+        setQuestions(prev => [question, ...prev]);
+        setNewUpdate(true);
+        setTimeout(() => setNewUpdate(false), 3000);
+      }
+    });
+
+    return () => {
+      socket.disconnect();
+    };
+  }, [sortBy, searchQuery]);
+
+  // Initial Fetch & Debounced Search
+  useEffect(() => {
     const timeoutId = setTimeout(() => {
-      fetchQuestions();
+      setPage(1);
+      fetchQuestions(1, false);
     }, 500);
 
     return () => clearTimeout(timeoutId);
   }, [searchQuery, sortBy, selectedTags]);
+
+  const handleLoadMore = () => {
+    const nextPage = page + 1;
+    setPage(nextPage);
+    fetchQuestions(nextPage, true);
+  };
 
   const toggleTag = (tag: string) => {
     setSelectedTags((prev) =>
@@ -83,7 +123,7 @@ export default function Explore() {
   };
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 animate-fade-in-up">
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-gray-900 dark:text-slate-100 mb-2">Explore Questions</h1>
         <p className="text-gray-600 dark:text-slate-400">Browse and search through all questions</p>
@@ -171,18 +211,19 @@ export default function Explore() {
         </div>
       )}
 
-      <div className="space-y-6">
-        {loading ? (
-          <div className="flex justify-center py-12">
-            <Loader2 className="w-8 h-8 animate-spin text-indigo-600" />
+      <div className="flex flex-col gap-6">
+
+        {/* New Questions Notification */}
+        {newUpdate && (
+          <div className="p-4 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-lg flex items-center gap-3 animate-bounce">
+            <Bell size={20} />
+            <span className="font-medium">New questions have arrived! The feed is updated.</span>
           </div>
-        ) : error ? (
-          <div className="text-center py-12 text-red-500">
-            {error}
-          </div>
-        ) : questions.length === 0 ? (
-          <div className="text-center py-12">
-            <p className="text-gray-600 dark:text-slate-400">No questions found matching your criteria.</p>
+        )}
+
+        {questions.length === 0 && !loading ? (
+          <div className="text-center py-16 text-gray-600 dark:text-slate-400">
+            No questions found satisfying your criteria.
           </div>
         ) : (
           questions.map((question) => (
@@ -193,6 +234,24 @@ export default function Explore() {
               />
             </div>
           ))
+        )}
+
+        {loading && (
+          <div className="flex justify-center p-4">
+            <Loader2 className="w-8 h-8 animate-spin text-indigo-600" />
+          </div>
+        )}
+
+        {/* Load More Button */}
+        {hasMore && !loading && questions.length > 0 && (
+          <div className="flex justify-center mt-4 pb-8">
+            <button
+              onClick={handleLoadMore}
+              className="px-6 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-300 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-700 transition font-medium shadow-sm"
+            >
+              Load More
+            </button>
+          </div>
         )}
       </div>
     </div>
