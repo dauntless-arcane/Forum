@@ -11,6 +11,15 @@ export interface User {
   verified?: boolean;
   upvotedAnswers?: string[];
   banned?: boolean;
+  createdAt?: string;
+  password?: string;
+}
+
+export interface Report {
+  id: string;
+  targetType: string;
+  reason: string;
+  targetId: string;
 }
 
 
@@ -47,3 +56,8 @@ export type Tag = {
   name: string;
   category: 'psychology' | 'corporate' | 'industry';
 };
+
+export interface AuthResponse {
+  token: string;
+  user: User;
+}

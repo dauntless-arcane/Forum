@@ -18,8 +18,9 @@ export default function Signup() {
             const { data } = await auth.signup({ name, email, password, role });
             login(data.token, data.user);
             navigate('/');
-        } catch (err: any) {
-            setError(err.response?.data?.error || 'Signup failed');
+        } catch (err: unknown) {
+            const error = err as { response?: { data?: { error?: string } } };
+            setError(error.response?.data?.error || 'Signup failed');
         }
     };
 
