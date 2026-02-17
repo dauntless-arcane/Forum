@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Loader2, Bell } from "lucide-react";
 import io from 'socket.io-client';
 import { questions as questionApi, answers as answerApi } from "../services/api";
@@ -42,11 +42,11 @@ export default function SpecialistDashboard() {
     };
   }, [filter]);
 
-  const fetchQuestions = async (pageNumber = 1, shouldAppend = false) => {
+  const fetchQuestions = useCallback(async (pageNumber = 1, shouldAppend = false) => {
     if (pageNumber === 1) setLoading(true);
 
     try {
-      const params: any = {
+      const params: Record<string, string | number> = {
         limit: 20,
         page: pageNumber,
         sort: 'newest'
@@ -71,12 +71,12 @@ export default function SpecialistDashboard() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [filter]);
 
   useEffect(() => {
     setPage(1);
     fetchQuestions(1, false);
-  }, [filter]);
+  }, [filter, fetchQuestions]);
 
   const handleLoadMore = () => {
     const nextPage = page + 1;
@@ -142,7 +142,7 @@ export default function SpecialistDashboard() {
         {["all", "pending", "answered"].map((tab) => (
           <button
             key={tab}
-            onClick={() => setFilter(tab as any)}
+            onClick={() => setFilter(tab as typeof filter)}
             className={`px-4 py-2 rounded-lg capitalize transition-colors ${filter === tab
               ? "bg-accent text-primary"
               : "bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700"
