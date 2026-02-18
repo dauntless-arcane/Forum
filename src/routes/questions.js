@@ -115,7 +115,72 @@ router.get('/', optionalAuth, async (req, res) => {
             questions: result.questions.map(q => anonymizeQuestion(q, req.user))
         });
 
+
     } catch (err) {
+        // specific handling for missing text index (code 27)
+        if (err.code === 27 || (err.codeName === 'IndexNotFound' && err.message.includes('text index'))) {
+            console.warn('⚠️ Text index missing, falling back to regex search');
+
+            // Remove text search and use regex instead
+            delete filter.$text;
+            if (search) {
+                const searchRegex = new RegExp(search.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&'), 'i');
+                filter.$or = [
+                    { title: { $regex: searchRegex } },
+                    { description: { $regex: searchRegex } }
+                ];
+            }
+
+            try {
+                // Retry query with regex
+                const [questions, total] = await Promise.all([
+                    db.collection('questions').find(filter).sort(sortObj).skip(skip).limit(limitNum).toArray(),
+                    db.collection('questions').countDocuments(filter),
+                ]);
+
+                // ... reuse existing logic for mapping users since filter changed but processing is same
+                // We need to duplicate the user fetching logic here or refactor.
+                // For simplicity/safety, duplicating key parts, or better: 
+                // Let's refactor the meaningful parts out if possible, but given constraints,
+                // I'll just re-run the user fetch logic here.
+
+                const userIds = [...new Set(questions.map(q => q.userId))];
+
+                const users = await db.collection('users')
+                    .find({ _id: { $in: userIds.map(id => new ObjectId(id)) } }, { projection: { password: 0 } })
+                    .toArray();
+
+                const userMap = {};
+                users.forEach(u => userMap[u._id.toString()] = u);
+
+                const result = {
+                    questions: questions.map(q => ({
+                        ...q,
+                        id: q._id.toString(),
+                        user: userMap[q.userId] || null,
+                        answerCount: q.answerCount || 0,
+                    })),
+                    pagination: {
+                        page: pageNum,
+                        limit: limitNum,
+                        total,
+                        totalPages: Math.ceil(total / limitNum),
+                    },
+                };
+
+                await cacheSet(cacheKey, result, 60);
+
+                return res.json({
+                    ...result,
+                    questions: result.questions.map(q => anonymizeQuestion(q, req.user))
+                });
+
+            } catch (retryErr) {
+                console.error('Retry with regex failed:', retryErr);
+                return res.status(500).json({ error: 'Failed to fetch questions (retry failed).' });
+            }
+        }
+
         console.error('Get questions error:', err);
         res.status(500).json({ error: 'Failed to fetch questions.' });
     }

@@ -23,35 +23,40 @@ async function connectDB() {
 }
 
 async function createIndexes(db) {
+    const createIndexSafe = async (collection, indexSpec, options = {}) => {
+        try {
+            console.log(`⏳ Creating index on ${collection}: ${JSON.stringify(indexSpec)}...`);
+            await db.collection(collection).createIndex(indexSpec, options);
+            console.log(`✅ Index verified on ${collection}: ${JSON.stringify(indexSpec)}`);
+        } catch (err) {
+            console.warn(`⚠️  Failed to create index on ${collection} (${JSON.stringify(indexSpec)}): ${err.message}`);
+        }
+    };
+
     try {
-        // Users
-        await db.collection('users').createIndex({ email: 1 }, { unique: true });
-        await db.collection('users').createIndex({ role: 1 });
+        // Run specific critical indexes first
+        await createIndexSafe('questions', { title: 'text', description: 'text' }, { name: 'question_text_search' });
 
-        // Questions
-        await db.collection('questions').createIndex({ userId: 1 });
-        await db.collection('questions').createIndex({ tags: 1 });
-        await db.collection('questions').createIndex({ status: 1 });
-        await db.collection('questions').createIndex({ createdAt: -1 });
-        await db.collection('questions').createIndex(
-            { title: 'text', description: 'text' },
-            { name: 'question_text_search' }
-        );
+        // Run others in parallel or sequence
+        const validations = [
+            createIndexSafe('users', { email: 1 }, { unique: true }),
+            createIndexSafe('users', { role: 1 }),
+            createIndexSafe('questions', { userId: 1 }),
+            createIndexSafe('questions', { tags: 1 }),
+            createIndexSafe('questions', { status: 1 }),
+            createIndexSafe('questions', { createdAt: -1 }),
+            createIndexSafe('answers', { questionId: 1 }),
+            createIndexSafe('answers', { userId: 1 }),
+            createIndexSafe('reports', { status: 1 }),
+            createIndexSafe('reports', { targetType: 1, targetId: 1 }),
+            createIndexSafe('moderation_logs', { createdAt: -1 })
+        ];
 
-        // Answers
-        await db.collection('answers').createIndex({ questionId: 1 });
-        await db.collection('answers').createIndex({ userId: 1 });
+        // We don't await all of them to block startup, but we log their completion
+        Promise.all(validations).then(() => console.log('✅ All background indexes processed'));
 
-        // Reports
-        await db.collection('reports').createIndex({ status: 1 });
-        await db.collection('reports').createIndex({ targetType: 1, targetId: 1 });
-
-        // Moderation logs
-        await db.collection('moderation_logs').createIndex({ createdAt: -1 });
-
-        console.log('✅ Database indexes created');
     } catch (err) {
-        console.warn('⚠️  Index creation warning:', err.message);
+        console.warn('⚠️  Index creation overall warning:', err.message);
     }
 }
 
