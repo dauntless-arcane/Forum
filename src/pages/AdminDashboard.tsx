@@ -14,7 +14,8 @@ import {
     Trash
 } from 'lucide-react';
 import io from 'socket.io-client';
-import { admin, users as userApi } from '../services/api';
+import { admin, users as userApi, questions } from '../services/api';
+import { useAuth } from '../context/AuthContext';
 
 const AdminDashboard = () => {
     const [activeTab, setActiveTab] = useState('overview');
@@ -45,15 +46,79 @@ const AdminDashboard = () => {
         }
     };
 
-    const handleBanUser = async (userId: string) => {
-        if (!confirm("Are you sure you want to ban this user?")) return;
+    const handleBanUser = async (userId: string, _name?: string) => {
+        if (!confirm(`Are you sure you want to ban user ${_name || userId}?`)) return;
         try {
             await admin.banUser(userId);
             alert("User banned successfully.");
             // Update feed to show banned status if needed, or remove their posts
+            // Refresh users list
+            const { data } = await userApi.getAll({ limit: 10 });
+            setRecentUsers(data.users.map((u: any) => ({
+                id: u.id,
+                name: u.name,
+                email: u.email,
+                role: u.role.charAt(0).toUpperCase() + u.role.slice(1),
+                status: u.banned ? 'Suspended' : (u.verified ? 'Active' : 'Pending'),
+                joined: new Date(u.createdAt || Date.now()).toLocaleDateString()
+            })));
         } catch (e) {
             console.error(e);
             alert("Failed to ban user.");
+        }
+    };
+
+    const handleApprove = async (userId: string) => {
+        try {
+            await admin.approveUser(userId);
+            // Optimistically update UI
+            setRecentUsers(prev => prev.map(u => u.id === userId ? { ...u, status: 'Active' } : u));
+            alert("User approved successfully.");
+        } catch (e) {
+            console.error(e);
+            alert("Failed to approve user.");
+        }
+    };
+
+    const [isBulkApproveOpen, setIsBulkApproveOpen] = useState(false);
+    const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
+
+    const handleOpenBulkApprove = () => {
+        const pending = recentUsers.filter(u => u.status === 'Pending' || u.status === 'pending');
+        if (pending.length === 0) {
+            alert("No pending users to review.");
+            return;
+        }
+        setSelectedUsers(pending.map(u => u.id)); // Select all by default
+        setIsBulkApproveOpen(true);
+    };
+
+    const toggleUserSelection = (userId: string) => {
+        setSelectedUsers(prev =>
+            prev.includes(userId) ? prev.filter(id => id !== userId) : [...prev, userId]
+        );
+    };
+
+    const handleBulkAction = async (action: 'approve' | 'reject') => {
+        if (selectedUsers.length === 0) return;
+
+        if (!confirm(`Are you sure you want to ${action} ${selectedUsers.length} users?`)) return;
+
+        try {
+            if (action === 'approve') {
+                await admin.bulkApproveUsers(selectedUsers);
+                setRecentUsers(prev => prev.map(u => selectedUsers.includes(u.id) ? { ...u, status: 'Active' } : u));
+                alert(`Successfully approved ${selectedUsers.length} users.`);
+            } else {
+                // Reject logic - essentially banning or deleting them appropriately
+                await Promise.all(selectedUsers.map(id => admin.banUser(id)));
+                setRecentUsers(prev => prev.map(u => selectedUsers.includes(u.id) ? { ...u, status: 'Suspended' } : u));
+                alert(`Successfully rejected ${selectedUsers.length} users.`);
+            }
+            setIsBulkApproveOpen(false);
+        } catch (e) {
+            console.error(e);
+            alert(`Failed to ${action} users.`);
         }
     };
 
@@ -74,15 +139,9 @@ const AdminDashboard = () => {
         setFeedLoading(true);
         try {
             // Using questions endpoint directly as the feed source
-            // Ensure we handle the URL correctly
-            const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
-            const questionsRes = await fetch(`${baseUrl}/questions?page=${page}&limit=20&sort=newest`);
+            const { data } = await questions.getAll({ page, limit: 20, sort: 'newest' });
 
-            if (!questionsRes.ok) throw new Error('Failed to fetch questions');
-
-            const questionsData = await questionsRes.json();
-            const questionsList = questionsData.questions || [];
-
+            const questionsList = data.questions || [];
             const newItems = questionsList.map((q: any) => ({ ...q, type: 'question' }));
 
             if (append) {
@@ -110,9 +169,17 @@ const AdminDashboard = () => {
         fetchFeed(nextPage, true);
     };
 
+    const { token, isAuthenticated } = useAuth();
+
     useEffect(() => {
-        // Socket connection
-        const newSocket = io(import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:5000');
+        if (!isAuthenticated || !token) return;
+
+        // Socket connection with auth token
+        const newSocket = io(import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:5000', {
+            auth: {
+                token: `Bearer ${token}`
+            }
+        });
 
         newSocket.on('connect', () => {
             console.log("Connected to admin socket");
@@ -130,22 +197,23 @@ const AdminDashboard = () => {
         return () => {
             newSocket.disconnect();
         };
-    }, []);
+    }, [isAuthenticated, token]);
 
     useEffect(() => {
         const fetchData = async () => {
             try {
                 // Fetch System Stats
                 let systemStats = {
-                    usersCount: 0,
-                    postsCount: 0,
-                    reportsCount: 0,
-                    specialistsCount: 0
+                    totalUsers: 0,
+                    specialistsCount: 0,
+                    pendingReports: 0,
+                    newPosts: 0
                 };
 
                 try {
-                    const { data } = await admin.getSystemStats();
+                    const { data } = await admin.getStats();
                     if (data) systemStats = data;
+                    console.log(data)
                 } catch (error) {
                     console.error("Failed to fetch system stats", error);
                 }
@@ -158,6 +226,7 @@ const AdminDashboard = () => {
                     setRecentUsers(usersList.map((u: any) => ({
                         id: u.id,
                         name: u.name,
+                        email: u.email,
                         role: u.role.charAt(0).toUpperCase() + u.role.slice(1),
                         status: u.banned ? 'Suspended' : (u.verified ? 'Active' : 'Pending'),
                         joined: new Date(u.createdAt || Date.now()).toLocaleDateString()
@@ -188,9 +257,9 @@ const AdminDashboard = () => {
 
                 // Update Stats Display
                 setStats([
-                    { title: 'Total Users', value: systemStats.usersCount.toString(), change: '+0', icon: Users, color: 'text-blue-500', bg: 'bg-blue-100 dark:bg-blue-900/20' },
-                    { title: 'Total Posts', value: systemStats.postsCount.toString(), change: '+0', icon: FileText, color: 'text-green-500', bg: 'bg-green-100 dark:bg-green-900/20' },
-                    { title: 'Pending Reports', value: systemStats.reportsCount.toString(), change: '+0', icon: AlertTriangle, color: 'text-orange-500', bg: 'bg-orange-100 dark:bg-orange-900/20' },
+                    { title: 'Total Users', value: systemStats.totalUsers.toString(), change: '+0', icon: Users, color: 'text-blue-500', bg: 'bg-blue-100 dark:bg-blue-900/20' },
+                    { title: 'Total Posts', value: systemStats.pendingReports.toString(), change: '+0', icon: FileText, color: 'text-green-500', bg: 'bg-green-100 dark:bg-green-900/20' },
+                    { title: 'Pending Reports', value: systemStats.newPosts.toString(), change: '+0', icon: AlertTriangle, color: 'text-orange-500', bg: 'bg-orange-100 dark:bg-orange-900/20' },
                     { title: 'Specialists', value: systemStats.specialistsCount.toString(), change: '+0', icon: CheckCircle, color: 'text-purple-500', bg: 'bg-purple-100 dark:bg-purple-900/20' },
                 ]);
 
@@ -317,7 +386,7 @@ const AdminDashboard = () => {
                                         View All
                                     </button>
                                 </div>
-                                <UserTable users={recentUsers} />
+                                <UserTable users={recentUsers} onBan={handleBanUser} onApprove={handleApprove} />
                             </div>
                         </>
                     )}
@@ -326,14 +395,22 @@ const AdminDashboard = () => {
                         <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-gray-100 dark:border-slate-700 overflow-hidden">
                             <div className="p-6 border-b border-gray-100 dark:border-slate-700 flex justify-between items-center">
                                 <h3 className="text-lg font-bold text-gray-800 dark:text-white">All Users</h3>
-                                <button
-                                    onClick={() => { setCreatedUsers([]); setIsBulkCreateOpen(true); }}
-                                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition flex items-center gap-2"
-                                >
-                                    <Users size={18} /> Bulk Create
-                                </button>
+                                <div className="flex gap-2">
+                                    <button
+                                        onClick={handleOpenBulkApprove}
+                                        className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition flex items-center gap-2"
+                                    >
+                                        <CheckCircle size={18} /> Review Pending Users
+                                    </button>
+                                    <button
+                                        onClick={() => { setCreatedUsers([]); setIsBulkCreateOpen(true); }}
+                                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition flex items-center gap-2"
+                                    >
+                                        <Users size={18} /> Bulk Create
+                                    </button>
+                                </div>
                             </div>
-                            <UserTable users={recentUsers} />
+                            <UserTable users={recentUsers} onBan={handleBanUser} onApprove={handleApprove} />
                         </div>
                     )}
 
@@ -484,6 +561,97 @@ const AdminDashboard = () => {
 
                 </div>
             </main>
+
+            {/* Bulk Review Modal */}
+            {isBulkApproveOpen && (
+                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                    <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+                        <div className="p-6 border-b border-gray-200 dark:border-slate-700 flex justify-between items-center">
+                            <h3 className="text-xl font-bold text-gray-800 dark:text-white">Review Pending Users</h3>
+                            <button onClick={() => setIsBulkApproveOpen(false)} className="text-gray-500 hover:text-gray-700 dark:hover:text-gray-300">
+                                <span className="sr-only">Close</span>
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                            </button>
+                        </div>
+
+                        <div className="p-6">
+                            <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+                                Review the users waiting for approval. Select users to approve or reject.
+                            </p>
+
+                            <div className="bg-gray-50 dark:bg-slate-900 rounded-lg border border-gray-200 dark:border-slate-700 overflow-hidden">
+                                <table className="w-full text-sm text-left">
+                                    <thead className="bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-gray-300">
+                                        <tr>
+                                            <th className="p-3 w-10">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={recentUsers.filter(u => u.status === 'Pending').every(u => selectedUsers.includes(u.id))}
+                                                    onChange={(e) => {
+                                                        const pending = recentUsers.filter(u => u.status === 'Pending');
+                                                        if (e.target.checked) {
+                                                            setSelectedUsers(pending.map(u => u.id));
+                                                        } else {
+                                                            setSelectedUsers([]);
+                                                        }
+                                                    }}
+                                                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                                />
+                                            </th>
+                                            <th className="p-3">User</th>
+                                            <th className="p-3">Email</th>
+                                            <th className="p-3">Role</th>
+                                            <th className="p-3">Joined</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-gray-200 dark:divide-slate-700">
+                                        {recentUsers.filter(u => u.status === 'Pending' || u.status === 'pending').map((user) => (
+                                            <tr key={user.id} className="hover:bg-gray-100 dark:hover:bg-slate-800/50">
+                                                <td className="p-3">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={selectedUsers.includes(user.id)}
+                                                        onChange={() => toggleUserSelection(user.id)}
+                                                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                                    />
+                                                </td>
+                                                <td className="p-3 font-medium text-gray-900 dark:text-gray-100">{user?.name}</td>
+                                                <td className="p-3 text-gray-500 dark:text-gray-400">{user?.email || "N/A"}</td>
+                                                <td className="p-3">{user?.role}</td>
+                                                <td className="p-3 text-gray-500 dark:text-gray-400">{user?.joined}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            <div className="mt-6 flex justify-between items-center">
+                                <span className="text-sm text-gray-500 dark:text-gray-400">
+                                    {selectedUsers.length} users selected
+                                </span>
+                                <div className="flex gap-3">
+                                    <button
+                                        onClick={() => handleBulkAction('reject')}
+                                        disabled={selectedUsers.length === 0}
+                                        className="px-4 py-2 bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300 rounded-lg hover:bg-red-200 dark:hover:bg-red-900/50 transition disabled:opacity-50 font-medium"
+                                    >
+                                        Reject Selected
+                                    </button>
+                                    <button
+                                        onClick={() => handleBulkAction('approve')}
+                                        disabled={selectedUsers.length === 0}
+                                        className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition disabled:opacity-50 font-medium flex items-center gap-2"
+                                    >
+                                        <CheckCircle size={16} /> Approve Selected
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Bulk Create Modal */}
             {isBulkCreateOpen && (
@@ -769,60 +937,105 @@ const SidebarItem = ({ icon: Icon, label, active, onClick, badge }: SidebarItemP
     </button>
 );
 
-const UserTable = ({ users }: { users: any[] }) => (
-    <div className="overflow-x-auto">
-        <table className="w-full">
-            <thead className="bg-gray-50 dark:bg-slate-700/50">
-                <tr>
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">User</th>
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Role</th>
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Status</th>
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Joined</th>
-                    <th className="px-6 py-4 text-right text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Actions</th>
-                </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100 dark:divide-slate-700">
-                {users.map((user) => (
-                    <tr key={user.id} className="hover:bg-gray-50 dark:hover:bg-slate-700/30 transition-colors">
-                        <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="flex items-center gap-3">
-                                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-400 to-indigo-500 flex items-center justify-center text-white text-xs font-bold">
-                                    {user.name?.charAt(0) || 'U'}
-                                </div>
-                                <span className="font-medium text-gray-900 dark:text-gray-100">{user.name}</span>
-                            </div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                            <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${user.role === 'Specialist'
-                                ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300'
-                                : 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
-                                }`}>
-                                {user.role}
-                            </span>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                            <span className={`flex items-center gap-1.5 text-sm ${user.status === 'Active' ? 'text-green-600 dark:text-green-400' :
-                                user.status === 'Suspended' ? 'text-red-600 dark:text-red-400' : 'text-orange-500'
-                                }`}>
-                                <span className={`w-1.5 h-1.5 rounded-full ${user.status === 'Active' ? 'bg-green-500' :
-                                    user.status === 'Suspended' ? 'bg-red-500' : 'bg-orange-500'
-                                    }`}></span>
-                                {user.status}
-                            </span>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                            {user.joined}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-right">
-                            <button className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 p-1 rounded-full hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors">
-                                <MoreVertical size={18} />
-                            </button>
-                        </td>
+const UserTable = ({ users, onBan, onApprove }: { users: any[], onBan: (id: string, name: string) => void, onApprove: (id: string) => void }) => {
+    const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+
+    const toggleMenu = (userId: string) => {
+        if (openMenuId === userId) {
+            setOpenMenuId(null);
+        } else {
+            setOpenMenuId(userId);
+        }
+    };
+
+    return (
+        <div className="overflow-visible min-h-[200px]">
+            <table className="w-full text-left border-collapse">
+                <thead className="bg-gray-50 dark:bg-slate-700/50">
+                    <tr>
+                        <th className="px-6 py-4 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">User</th>
+                        <th className="px-6 py-4 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Role</th>
+                        <th className="px-6 py-4 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Status</th>
+                        <th className="px-6 py-4 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Joined</th>
+                        <th className="px-6 py-4 text-right text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Actions</th>
                     </tr>
-                ))}
-            </tbody>
-        </table>
-    </div>
-);
+                </thead>
+                <tbody className="divide-y divide-gray-100 dark:divide-slate-700">
+                    {users.map((user) => (
+                        <tr key={user.id} className="hover:bg-gray-50 dark:hover:bg-slate-700/30 transition-colors relative">
+                            <td className="px-6 py-4 whitespace-nowrap">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-400 to-indigo-500 flex items-center justify-center text-white text-xs font-bold">
+                                        {user.name?.charAt(0) || 'U'}
+                                    </div>
+                                    <span className="font-medium text-gray-900 dark:text-gray-100">{user.name}</span>
+                                </div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                                <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${user.role === 'Specialist'
+                                    ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300'
+                                    : 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
+                                    }`}>
+                                    {user.role}
+                                </span>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                                <span className={`flex items-center gap-1.5 text-sm ${user.status === 'Active' ? 'text-green-600 dark:text-green-400' :
+                                    user.status === 'Suspended' ? 'text-red-600 dark:text-red-400' : 'text-orange-500'
+                                    }`}>
+                                    <span className={`w-1.5 h-1.5 rounded-full ${user.status === 'Active' ? 'bg-green-500' :
+                                        user.status === 'Suspended' ? 'bg-red-500' : 'bg-orange-500'
+                                        }`}></span>
+                                    {user.status}
+                                </span>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                                {user.joined}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-right relative">
+                                <button
+                                    onClick={() => toggleMenu(user.id)}
+                                    className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 p-1 rounded-full hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
+                                >
+                                    <MoreVertical size={18} />
+                                </button>
+                                {openMenuId === user.id && (
+                                    <>
+                                        <div
+                                            className="fixed inset-0 z-10"
+                                            onClick={() => setOpenMenuId(null)}
+                                        />
+                                        <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-slate-800 rounded-lg shadow-xl border border-gray-100 dark:border-slate-700 z-20 py-1 text-left">
+                                            {user.status !== 'Active' && user.status !== 'Suspended' && (
+                                                <button
+                                                    onClick={() => {
+                                                        onApprove(user.id);
+                                                        setOpenMenuId(null);
+                                                    }}
+                                                    className="w-full px-4 py-2 text-sm text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-slate-700 flex items-center gap-2"
+                                                >
+                                                    <CheckCircle size={14} /> Approve User
+                                                </button>
+                                            )}
+                                            <button
+                                                onClick={() => {
+                                                    onBan(user.id, user.name);
+                                                    setOpenMenuId(null);
+                                                }}
+                                                className="w-full px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-slate-700 flex items-center gap-2"
+                                            >
+                                                <AlertTriangle size={14} /> Ban User
+                                            </button>
+                                        </div>
+                                    </>
+                                )}
+                            </td>
+                        </tr>
+                    ))}
+                </tbody>
+            </table>
+        </div>
+    );
+};
 
 export default AdminDashboard;

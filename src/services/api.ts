@@ -47,11 +47,11 @@ export const users = {
   getById: (id: string) => api.get(`/users/${id}`),
   updateProfile: (data: any) => api.put('/users/profile', data),
   getSpecialists: () => api.get('/users/specialists'),
-  getAll: (params?: any) => api.get('/users', { params }), // Optimistic
+  getAll: (params?: any) => api.get('/admin/users', { params }), // Optimistic
 };
 
 export const admin = {
-  getStats: () => api.get('/moderation/stats'), // Updated to real endpoint
+  getStats: () => api.get('/admin/stats'), // Updated to real endpoint
   getReports: (status = 'pending') => api.get('/moderation/reports', { params: { status } }),
   getBlockedWords: () => api.get('/moderation/blocked-words'),
   addBlockedWords: (words: string[]) => api.post('/moderation/blocked-words', { words }),
@@ -68,6 +68,8 @@ export const admin = {
   getSystemStats: () => api.get('/moderation/stats'),
   getLogs: () => api.get('/moderation/logs'),
   checkHealth: () => api.get('/health'),
+  approveUser: (userId: string) => api.patch(`/admin/users/${userId}/approve`),
+  bulkApproveUsers: (userIds: string[]) => api.post('/admin/users/bulk-approve', { userIds }),
 };
 
 export const tags = {

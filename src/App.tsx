@@ -12,6 +12,7 @@ import Specialists from "./pages/Specialists";
 import Login from './pages/Login';
 import Signup from './pages/Signup';
 import Profile from './pages/Profile';
+import ProtectedRoute from './components/ProtectedRoute';
 
 function App() {
   const [darkMode, setDarkMode] = useState(() => {
@@ -37,15 +38,24 @@ function App() {
           <Navbar darkMode={darkMode} toggleDarkMode={toggleDarkMode} />
           <Routes>
             <Route path="/" element={<Explore />} />
-            <Route path="/dashboard" element={<Dashboard />} />
-            <Route path="/ask" element={<AskQuestion />} />
-            <Route path="/question/:id" element={<QuestionDetail />} />
-            <Route path="/specialists" element={<Specialists />} />
-            <Route path="/specialist-panel" element={<SpecialistDashboard />} />
             <Route path="/login" element={<Login />} />
             <Route path="/signup" element={<Signup />} />
-            <Route path="/admin" element={<AdminDashboard />} />
-            <Route path="/profile" element={<Profile />} />
+
+            <Route element={<ProtectedRoute />}>
+              <Route path="/dashboard" element={<Dashboard />} />
+              <Route path="/ask" element={<AskQuestion />} />
+              <Route path="/question/:id" element={<QuestionDetail />} />
+              <Route path="/specialists" element={<Specialists />} />
+              <Route path="/profile" element={<Profile />} />
+            </Route>
+
+            <Route element={<ProtectedRoute allowedRoles={['specialist']} />}>
+              <Route path="/specialist-panel" element={<SpecialistDashboard />} />
+            </Route>
+
+            <Route element={<ProtectedRoute allowedRoles={['admin']} />}>
+              <Route path="/admin" element={<AdminDashboard />} />
+            </Route>
           </Routes>
         </div>
       </Router>
