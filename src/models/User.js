@@ -47,6 +47,10 @@ const userSchema = {
                 bsonType: 'bool',
                 description: 'is banned'
             },
+            banReason: {
+                bsonType: ['string', 'null'],
+                description: 'reason for ban'
+            },
             upvotedAnswers: {
                 bsonType: 'array',
                 items: {

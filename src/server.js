@@ -10,6 +10,7 @@ const morgan = require('morgan');
 const rateLimit = require('express-rate-limit');
 
 const { connectDB, closeDB } = require('./config/database');
+const { initCollections } = require('./config/init');
 const { connectRedis, closeRedis, getRedis } = require('./config/redis');
 const Redis = require('ioredis');
 const { createAdapter } = require('@socket.io/redis-adapter');
@@ -205,6 +206,10 @@ async function startServer() {
     try {
         // Connect to databases
         await connectDB();
+
+        // Initialize Collections & Indexes
+        initCollections();
+
         connectRedis();
 
         // Use server.listen instead of app.listen
@@ -214,7 +219,7 @@ async function startServer() {
 ║        🚀 Forum API Server Running          ║
 ╠══════════════════════════════════════════════╣
 ║  Port:      ${String(PORT).padEnd(33)}║
-║  Mode:      ${(process.env.NODE_ENV || 'development').padEnd(33)}║
+║  Mode:      ${(process.env.NODE_ENV || 'development').padEnd(30)}║
 ║  Docs:      http://localhost:${String(PORT).padEnd(5)}/api-docs     ║
 ║  MongoDB:   Connected                       ║
 ║  Redis:     ${(getRedis() ? 'Connected' : 'Disabled (optional)').padEnd(33)}║

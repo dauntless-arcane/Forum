@@ -86,9 +86,16 @@ function analyzeContent(text) {
 
     const reasons = [];
 
-    // Check for profanity
-    if (filter.isProfane(text)) {
-        reasons.push('Contains profane or abusive language');
+    // Check for profanity and identify specific words
+    const foundProfaneWords = [];
+    const lowerText = text.toLowerCase();
+    for (const badWord of filter.list) { // filter.list contains the bad words
+        if (lowerText.includes(badWord)) {
+            foundProfaneWords.push(badWord);
+        }
+    }
+    if (foundProfaneWords.length > 0) {
+        reasons.push(`Contains profane or abusive language: ${[...new Set(foundProfaneWords)].join(', ')}`);
         // STRICT MODE: Profanity is an immediate block
         return { severity: SEVERITY.BLOCKED, reasons };
     }
