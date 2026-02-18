@@ -15,7 +15,43 @@ const AdminModeration = () => {
     const [feedLoading, setFeedLoading] = useState(false);
     const [feedPage, setFeedPage] = useState(1);
     const [feedHasMore, setFeedHasMore] = useState(true);
+
+    const [blockedWords, setBlockedWords] = useState<string[]>([]);
+    const [newBlockedWord, setNewBlockedWord] = useState('');
+
     const { token, isAuthenticated } = useAuth();
+
+    const fetchBlockedWords = async () => {
+        try {
+            const { data } = await admin.getBlockedWords();
+            // Assuming API returns { words: [...] } or just [...]
+            setBlockedWords(Array.isArray(data) ? data : data.words || []);
+        } catch (e) {
+            console.error("Failed to fetch blocked words", e);
+        }
+    };
+
+    const handleAddBlockedWord = async () => {
+        if (!newBlockedWord.trim()) return;
+        try {
+            await admin.addBlockedWords([newBlockedWord.trim()]);
+            setBlockedWords(prev => [...prev, newBlockedWord.trim()]);
+            setNewBlockedWord('');
+        } catch (e) {
+            console.error("Failed to add blocked word", e);
+            alert("Failed to add blocked word.");
+        }
+    };
+
+    const handleRemoveBlockedWord = async (word: string) => {
+        try {
+            await admin.removeBlockedWord(word);
+            setBlockedWords(prev => prev.filter(w => w !== word));
+        } catch (e) {
+            console.error("Failed to remove blocked word", e);
+            alert("Failed to remove blocked word.");
+        }
+    };
 
     const fetchFeed = async (page = 1, append = false) => {
         setFeedLoading(true);
@@ -42,6 +78,7 @@ const AdminModeration = () => {
 
     useEffect(() => {
         fetchFeed(1);
+        fetchBlockedWords();
     }, []);
 
     const handleLoadMoreFeed = () => {
@@ -102,94 +139,143 @@ const AdminModeration = () => {
     }, [isAuthenticated, token]);
 
     return (
-        <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-gray-100 dark:border-slate-700 overflow-hidden">
-            <div className="p-6 border-b border-gray-100 dark:border-slate-700 flex justify-between items-center">
-                <div>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Blocked Words Panel */}
+            <div className="lg:col-span-1 bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-gray-100 dark:border-slate-700 overflow-hidden h-fit">
+                <div className="p-6 border-b border-gray-100 dark:border-slate-700">
                     <h3 className="text-lg font-bold text-gray-800 dark:text-white flex items-center gap-2">
-                        <Activity size={20} className="text-green-500" /> Live Content Feed
+                        <Trash size={20} className="text-red-500" /> Blocked Words
                     </h3>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">Real-time stream of new questions and answers.</p>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">Manage automated content filters.</p>
                 </div>
-                <span className="px-3 py-1 bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300 text-xs rounded-full font-medium animate-pulse">
-                    • Live
-                </span>
-            </div>
-
-            <div className="divide-y divide-gray-100 dark:divide-slate-700 max-h-[600px] overflow-y-auto">
-                {contentFeed.length === 0 ? (
-                    <div className="p-12 text-center text-gray-500 dark:text-gray-400">
-                        <div className="flex justify-center mb-4">
-                            <div className="w-16 h-16 bg-blue-50 dark:bg-slate-700 rounded-full flex items-center justify-center animate-pulse">
-                                <Activity className="text-blue-500" size={32} />
-                            </div>
-                        </div>
-                        <p className="text-lg font-medium">Waiting for new activity...</p>
-                        <p className="text-sm mt-1">New posts will appear here instantly.</p>
-                    </div>
-                ) : (
-                    contentFeed.map((item, index) => (
-                        <div key={item.id || index} className="p-6 hover:bg-gray-50 dark:hover:bg-slate-700/30 transition-colors animate-fade-in-up">
-                            <div className="flex justify-between items-start gap-4">
-                                <div className="flex-1">
-                                    <div className="flex items-center gap-2 mb-2">
-                                        <span className={`px-2 py-0.5 rounded text-xs font-bold uppercase ${item.type === 'question'
-                                            ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
-                                            : 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300'
-                                            }`}>
-                                            {item.type}
-                                        </span>
-                                        <span className="text-sm text-gray-500 dark:text-gray-400">
-                                            by <span className="font-medium text-gray-900 dark:text-white">{item.userId?.name || 'Unknown User'}</span>
-                                        </span>
-                                        <span className="text-xs text-gray-400">
-                                            {new Date(item.createdAt || item.timestamp).toLocaleTimeString()}
-                                        </span>
-                                    </div>
-
-                                    {item.title && (
-                                        <h4 className="font-bold text-gray-800 dark:text-white mb-1">{item.title}</h4>
-                                    )}
-                                    <p className="text-gray-600 dark:text-gray-300 text-sm line-clamp-2">
-                                        {item.description || item.content}
-                                    </p>
-                                </div>
-
-                                <div className="flex items-center gap-2">
-                                    <button
-                                        onClick={() => handleBanUser(item.userId?.id || item.userId)}
-                                        className="p-2 text-orange-500 hover:bg-orange-50 dark:hover:bg-orange-900/20 rounded-lg transition-colors"
-                                        title="Ban User"
-                                    >
-                                        <Users size={18} />
-                                    </button>
-                                    <button
-                                        onClick={() => handleDeleteContent(item.type, item.id)}
-                                        className="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
-                                        title="Delete Content"
-                                    >
-                                        <Trash size={18} />
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    ))
-                )}
-
-                {feedHasMore && (
-                    <div className="p-4 text-center border-t border-gray-100 dark:border-slate-700">
+                <div className="p-6">
+                    <div className="flex gap-2 mb-4">
+                        <input
+                            type="text"
+                            value={newBlockedWord}
+                            onChange={(e) => setNewBlockedWord(e.target.value)}
+                            onKeyDown={(e) => e.key === 'Enter' && handleAddBlockedWord()}
+                            placeholder="Add word..."
+                            className="flex-1 px-3 py-2 bg-gray-50 dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-500/50"
+                        />
                         <button
-                            onClick={handleLoadMoreFeed}
-                            disabled={feedLoading}
-                            className="px-6 py-2 bg-gray-50 dark:bg-slate-700 hover:bg-gray-100 dark:hover:bg-slate-600 text-gray-700 dark:text-gray-300 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+                            onClick={handleAddBlockedWord}
+                            disabled={!newBlockedWord.trim()}
+                            className="px-3 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition disabled:opacity-50"
                         >
-                            {feedLoading ? (
-                                <span className="flex items-center gap-2">
-                                    <Loader2 className="animate-spin" size={16} /> Loading...
-                                </span>
-                            ) : 'Load More Activity'}
+                            Add
                         </button>
                     </div>
-                )}
+
+                    <div className="flex flex-wrap gap-2">
+                        {blockedWords.map((word) => (
+                            <span key={word} className="px-3 py-1 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-full text-sm font-medium flex items-center gap-2 group">
+                                {word}
+                                <button
+                                    onClick={() => handleRemoveBlockedWord(word)}
+                                    className="hover:text-red-800 dark:hover:text-red-200"
+                                >
+                                    &times;
+                                </button>
+                            </span>
+                        ))}
+                        {blockedWords.length === 0 && (
+                            <p className="text-sm text-gray-400 italic">No blocked words set.</p>
+                        )}
+                    </div>
+                </div>
+            </div>
+
+            {/* Content Feed */}
+            <div className="lg:col-span-2 bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-gray-100 dark:border-slate-700 overflow-hidden">
+                <div className="p-6 border-b border-gray-100 dark:border-slate-700 flex justify-between items-center">
+                    <div>
+                        <h3 className="text-lg font-bold text-gray-800 dark:text-white flex items-center gap-2">
+                            <Activity size={20} className="text-green-500" /> Live Content Feed
+                        </h3>
+                        <p className="text-sm text-gray-500 dark:text-gray-400">Real-time stream of new questions and answers.</p>
+                    </div>
+                    <span className="px-3 py-1 bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300 text-xs rounded-full font-medium animate-pulse">
+                        • Live
+                    </span>
+                </div>
+
+                <div className="divide-y divide-gray-100 dark:divide-slate-700 max-h-[600px] overflow-y-auto">
+                    {contentFeed.length === 0 ? (
+                        <div className="p-12 text-center text-gray-500 dark:text-gray-400">
+                            <div className="flex justify-center mb-4">
+                                <div className="w-16 h-16 bg-blue-50 dark:bg-slate-700 rounded-full flex items-center justify-center animate-pulse">
+                                    <Activity className="text-blue-500" size={32} />
+                                </div>
+                            </div>
+                            <p className="text-lg font-medium">Waiting for new activity...</p>
+                            <p className="text-sm mt-1">New posts will appear here instantly.</p>
+                        </div>
+                    ) : (
+                        contentFeed.map((item, index) => (
+                            <div key={item.id || index} className="p-6 hover:bg-gray-50 dark:hover:bg-slate-700/30 transition-colors animate-fade-in-up">
+                                <div className="flex justify-between items-start gap-4">
+                                    <div className="flex-1">
+                                        <div className="flex items-center gap-2 mb-2">
+                                            <span className={`px-2 py-0.5 rounded text-xs font-bold uppercase ${item.type === 'question'
+                                                ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
+                                                : 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300'
+                                                }`}>
+                                                {item.type}
+                                            </span>
+                                            <span className="text-sm text-gray-500 dark:text-gray-400">
+                                                by <span className="font-medium text-gray-900 dark:text-white">{item.userId?.name || 'Unknown User'}</span>
+                                            </span>
+                                            <span className="text-xs text-gray-400">
+                                                {new Date(item.createdAt || item.timestamp).toLocaleTimeString()}
+                                            </span>
+                                        </div>
+
+                                        {item.title && (
+                                            <h4 className="font-bold text-gray-800 dark:text-white mb-1">{item.title}</h4>
+                                        )}
+                                        <p className="text-gray-600 dark:text-gray-300 text-sm line-clamp-2">
+                                            {item.description || item.content}
+                                        </p>
+                                    </div>
+
+                                    <div className="flex items-center gap-2">
+                                        <button
+                                            onClick={() => handleBanUser(item.userId?.id || item.userId)}
+                                            className="p-2 text-orange-500 hover:bg-orange-50 dark:hover:bg-orange-900/20 rounded-lg transition-colors"
+                                            title="Ban User"
+                                        >
+                                            <Users size={18} />
+                                        </button>
+                                        <button
+                                            onClick={() => handleDeleteContent(item.type, item.id)}
+                                            className="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                                            title="Delete Content"
+                                        >
+                                            <Trash size={18} />
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        ))
+                    )}
+
+                    {feedHasMore && (
+                        <div className="p-4 text-center border-t border-gray-100 dark:border-slate-700">
+                            <button
+                                onClick={handleLoadMoreFeed}
+                                disabled={feedLoading}
+                                className="px-6 py-2 bg-gray-50 dark:bg-slate-700 hover:bg-gray-100 dark:hover:bg-slate-600 text-gray-700 dark:text-gray-300 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+                            >
+                                {feedLoading ? (
+                                    <span className="flex items-center gap-2">
+                                        <Loader2 className="animate-spin" size={16} /> Loading...
+                                    </span>
+                                ) : 'Load More Activity'}
+                            </button>
+                        </div>
+                    )}
+                </div>
             </div>
         </div>
     );
