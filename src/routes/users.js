@@ -92,7 +92,7 @@ router.put('/profile', authenticate, async (req, res) => {
         if (profession !== undefined) updates.profession = profession;
         if (expertise !== undefined) updates.expertise = Array.isArray(expertise) ? expertise : [];
         updates.updatedAt = new Date();
-
+        console.log(updates)
         const db = getDB();
         await db.collection('users').updateOne(
             { _id: req.user._id },

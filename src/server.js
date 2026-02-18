@@ -13,6 +13,7 @@ const { connectDB, closeDB } = require('./config/database');
 const { connectRedis, closeRedis, getRedis } = require('./config/redis');
 const Redis = require('ioredis');
 const { createAdapter } = require('@socket.io/redis-adapter');
+const { verifyToken } = require('./middleware/auth');
 
 
 
@@ -66,9 +67,20 @@ Promise.all([pubClient.connect(), subClient.connect()]).then(() => {
 io.on('connection', (socket) => {
     console.log(`🔌 New client connected: ${socket.id}`);
 
-    socket.on('join_specialist_room', () => {
-        socket.join('specialists');
-        console.log(`Client ${socket.id} joined specialist room`);
+    socket.on('join_specialist_room', async (token) => {
+        try {
+            const user = await verifyToken(token);
+            if (user.role === 'specialist' || user.role === 'admin') {
+                socket.join('specialists');
+                console.log(`Client ${socket.id} (User: ${user.username}) joined specialist room`);
+            } else {
+                console.warn(`Unauthorized join attempt to specialist room by ${user.username}`);
+                socket.emit('error', 'Unauthorized: Specialists only');
+            }
+        } catch (err) {
+            console.error(`Socket auth failed for specialist room: ${err.message}`);
+            socket.emit('error', 'Authentication failed');
+        }
     });
 
     socket.on('join_explore', () => {
@@ -76,10 +88,20 @@ io.on('connection', (socket) => {
         console.log(`Client ${socket.id} joined explore feed`);
     });
 
-    socket.on('join_admin_room', (token) => {
-        // ideally we should verify token here, but for now we trust the client logic or could verify JWT
-        socket.join('admin_feed');
-        console.log(`Client ${socket.id} joined admin feed`);
+    socket.on('join_admin_room', async (token) => {
+        try {
+            const user = await verifyToken(token);
+            if (user.role === 'admin') {
+                socket.join('admin_feed');
+                console.log(`Client ${socket.id} (User: ${user.username}) joined admin feed`);
+            } else {
+                console.warn(`Unauthorized join attempt to admin room by ${user.username}`);
+                socket.emit('error', 'Unauthorized: Admins only');
+            }
+        } catch (err) {
+            console.error(`Socket auth failed for admin room: ${err.message}`);
+            socket.emit('error', 'Authentication failed');
+        }
     });
 
     socket.on('disconnect', () => {

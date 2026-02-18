@@ -13,7 +13,8 @@ const router = express.Router();
 function anonymizeQuestion(question, viewer) {
     if (!question || !question.user) return question;
 
-    const isAuthor = viewer && viewer._id.toString() === question.userId.toString();
+    const isAuthor = viewer && viewer._id === question.userId;
+
     const isAdmin = viewer && viewer.role === 'admin';
 
     if (isAuthor || isAdmin) return question;

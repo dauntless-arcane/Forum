@@ -89,6 +89,109 @@ router.get('/users', async (req, res) => {
     }
 });
 
+// ──────────────── PATCH /api/admin/users/:id/approve ────────────────
+router.patch('/users/:id/approve', async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        let userId;
+        try {
+            userId = new ObjectId(id);
+        } catch {
+            return res.status(400).json({ error: 'Invalid user ID.' });
+        }
+
+        const db = getDB();
+        const result = await db.collection('users').updateOne(
+            { _id: userId },
+            {
+                $set: {
+                    verified: true,
+                    updatedAt: new Date()
+                }
+            }
+        );
+
+        if (result.matchedCount === 0) {
+            return res.status(404).json({ error: 'User not found.' });
+        }
+
+        // Invalidate user cache
+        await cacheDel(`user:${id}`);
+        await cacheDel(`userProfile:${id}`);
+        await cacheDel('specialists:all');
+
+        res.json({ message: 'User approved successfully.' });
+    } catch (err) {
+        console.error('Approve user error:', err);
+        res.status(500).json({ error: 'Failed to approve user.' });
+    }
+});
+
+// ──────────────── PATCH /api/admin/users/bulk-approve ────────────────
+router.post('/users/bulk-approve', async (req, res) => {
+    try {
+        const { userIds } = req.body;
+
+        if (!Array.isArray(userIds) || userIds.length === 0) {
+            return res.status(400).json({ error: 'userIds must be a non-empty array.' });
+        }
+
+        const uniqueIds = [...new Set(userIds)];
+        const objectIds = [];
+        const invalidIds = [];
+
+        uniqueIds.forEach(id => {
+            try {
+                objectIds.push(new ObjectId(id));
+            } catch {
+                invalidIds.push(id);
+            }
+        });
+
+        if (invalidIds.length > 0) {
+            return res.status(400).json({ error: 'Invalid user IDs provided.', invalidIds });
+        }
+
+        const db = getDB();
+
+        // Update users
+        await db.collection('users').updateMany(
+            { _id: { $in: objectIds } },
+            {
+                $set: {
+                    verified: true,
+                    updatedAt: new Date()
+                }
+            }
+        );
+
+        // Fetch the updated users to return details
+        const users = await db.collection('users')
+            .find({ _id: { $in: objectIds } }, { projection: { password: 0 } })
+            .toArray();
+
+        const results = users.map(u => ({ ...u, id: u._id.toString() }));
+
+        // Invalidate caches for all modified users
+        const promises = objectIds.map(id => Promise.all([
+            cacheDel(`user:${id}`),
+            cacheDel(`userProfile:${id}`)
+        ]));
+        await Promise.all(promises);
+        await cacheDel('specialists:all');
+
+        res.json({
+            message: 'Users approved successfully.',
+            users: results,
+            count: results.length
+        });
+    } catch (err) {
+        console.error('Bulk approve users error:', err);
+        res.status(500).json({ error: 'Failed to bulk approve users.' });
+    }
+});
+
 // ──────────────── PATCH /api/admin/users/:id/ban ────────────────
 router.patch('/users/:id/ban', async (req, res) => {
     try {

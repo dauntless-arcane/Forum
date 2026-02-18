@@ -573,6 +573,53 @@ Most endpoints require a Bearer Token. Login to get one, then click **Authorize*
                     }
                 }
             },
+            '/admin/users/bulk-approve': {
+                post: {
+                    tags: ['Admin'],
+                    summary: 'Bulk approve users',
+                    description: 'Mark multiple users as verified.',
+                    security: [{ bearerAuth: [] }],
+                    requestBody: {
+                        required: true,
+                        content: {
+                            'application/json': {
+                                schema: {
+                                    type: 'object',
+                                    required: ['userIds'],
+                                    properties: { userIds: { type: 'array', items: { type: 'string' } } }
+                                }
+                            }
+                        }
+                    },
+                    responses: {
+                        200: {
+                            description: 'Users approved successfully',
+                            content: {
+                                'application/json': {
+                                    schema: {
+                                        type: 'object',
+                                        properties: {
+                                            message: { type: 'string' },
+                                            count: { type: 'integer' },
+                                            users: { type: 'array', items: { $ref: '#/components/schemas/User' } }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            '/admin/users/{id}/approve': {
+                patch: {
+                    tags: ['Admin'],
+                    summary: 'Approve user',
+                    description: 'Mark a user as verified.',
+                    parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+                    security: [{ bearerAuth: [] }],
+                    responses: { 200: { description: 'User approved successfully' } }
+                }
+            },
             '/admin/users/{id}/ban': {
                 patch: {
                     tags: ['Admin'],

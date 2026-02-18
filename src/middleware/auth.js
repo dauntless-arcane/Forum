@@ -4,6 +4,40 @@ const { getDB } = require('../config/database');
 const { cacheGet, cacheSet } = require('../config/redis');
 const { ObjectId } = require('mongodb');
 
+// Verify JWT and return user
+async function verifyToken(token) {
+    if (!token) {
+        throw new Error('No token provided');
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+    // Try cache first
+    const cacheKey = `user:${decoded.id}`;
+    let user = await cacheGet(cacheKey);
+
+    if (!user) {
+        const db = getDB();
+        user = await db.collection('users').findOne(
+            { _id: new ObjectId(decoded.id) },
+            { projection: { password: 0 } }
+        );
+
+        if (!user) {
+            throw new Error('User not found');
+        }
+
+        // Cache user for 5 minutes
+        await cacheSet(cacheKey, user, 300);
+    }
+
+    if (user.banned || !user.verified) {
+        throw new Error('Your account has been suspended or is not verified');
+    }
+
+    return user;
+}
+
 // Verify JWT and attach user to request
 async function authenticate(req, res, next) {
     try {
@@ -13,30 +47,7 @@ async function authenticate(req, res, next) {
         }
 
         const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, process.env.JWT_SECRET);
-
-        // Try cache first
-        const cacheKey = `user:${decoded.id}`;
-        let user = await cacheGet(cacheKey);
-
-        if (!user) {
-            const db = getDB();
-            user = await db.collection('users').findOne(
-                { _id: new ObjectId(decoded.id) },
-                { projection: { password: 0 } }
-            );
-
-            if (!user) {
-                return res.status(401).json({ error: 'User not found.' });
-            }
-
-            // Cache user for 5 minutes
-            await cacheSet(cacheKey, user, 300);
-        }
-
-        if (user.banned) {
-            return res.status(403).json({ error: 'Your account has been suspended.' });
-        }
+        const user = await verifyToken(token);
 
         req.user = user;
         next();
@@ -47,6 +58,13 @@ async function authenticate(req, res, next) {
         if (err.name === 'JsonWebTokenError') {
             return res.status(401).json({ error: 'Invalid token.' });
         }
+        if (err.message === 'User not found') {
+            return res.status(401).json({ error: err.message });
+        }
+        if (err.message === 'Your account has been suspended or is not verified') {
+            return res.status(403).json({ error: err.message });
+        }
+
         return res.status(500).json({ error: 'Authentication failed.' });
     }
 }
@@ -83,4 +101,4 @@ function authorize(...roles) {
     };
 }
 
-module.exports = { authenticate, optionalAuth, authorize };
+module.exports = { authenticate, optionalAuth, authorize, verifyToken };
