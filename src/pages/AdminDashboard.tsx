@@ -39,10 +39,14 @@ const AdminDashboard = () => {
     const handleBulkCreate = async (users: any[]) => {
         try {
             const { data } = await admin.bulkCreateUsers(users);
-            setCreatedUsers(data.users || []);
-        } catch (error) {
+            const created = data.users || [];
+            setCreatedUsers(created);
+            alert(`Successfully created ${created.length} users.`);
+        } catch (error: any) {
             console.error("Bulk create failed", error);
-            alert("Failed to create users. Please check input.");
+            // Show more specific error if available
+            const message = error.response?.data?.message || error.message || "Failed to create users.";
+            alert(`Bulk creation failed: ${message}\nPlease check your input for duplicates or invalid data.`);
         }
     };
 
@@ -670,39 +674,98 @@ const AdminDashboard = () => {
                         <div className="p-6">
                             {createdUsers.length > 0 ? (
                                 <div>
-                                    <div className="mb-4 p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
-                                        <p className="text-green-700 dark:text-green-300 font-medium">Successfully created {createdUsers.length} users!</p>
-                                    </div>
-                                    <p className="text-sm text-gray-500 dark:text-gray-400 mb-2">Please copy these credentials. Passwords will not be shown again.</p>
-                                    <div className="bg-gray-50 dark:bg-slate-900 rounded-lg p-4 border border-gray-200 dark:border-slate-700 overflow-x-auto">
-                                        <table className="w-full text-sm text-left">
-                                            <thead>
-                                                <tr className="text-gray-500 dark:text-gray-400 border-b border-gray-200 dark:border-slate-700">
-                                                    <th className="pb-2">Name</th>
-                                                    <th className="pb-2">Email</th>
-                                                    <th className="pb-2">Password</th>
-                                                    <th className="pb-2">Role</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                {createdUsers.map((u, i) => (
-                                                    <tr key={i} className="border-b border-gray-100 dark:border-slate-800 last:border-0">
-                                                        <td className="py-2 pr-4">{u.name}</td>
-                                                        <td className="py-2 pr-4">{u.email}</td>
-                                                        <td className="py-2 pr-4 font-mono text-blue-600 dark:text-blue-400">{u.password}</td>
-                                                        <td className="py-2">{u.role}</td>
+                                    <div>
+                                        <div className="mb-4 p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
+                                            <p className="text-green-700 dark:text-green-300 font-medium">Successfully created {createdUsers.length} users!</p>
+                                        </div>
+                                        <p className="text-sm text-gray-500 dark:text-gray-400 mb-2">Please copy these credentials. Passwords will not be shown again.</p>
+                                        <div className="bg-gray-50 dark:bg-slate-900 rounded-lg p-4 border border-gray-200 dark:border-slate-700 overflow-x-auto">
+                                            <table className="w-full text-sm text-left">
+                                                <thead>
+                                                    <tr className="text-gray-500 dark:text-gray-400 border-b border-gray-200 dark:border-slate-700">
+                                                        <th className="pb-2">Name</th>
+                                                        <th className="pb-2">Email</th>
+                                                        <th className="pb-2">Password</th>
+                                                        <th className="pb-2">Role</th>
                                                     </tr>
-                                                ))}
-                                            </tbody>
-                                        </table>
+                                                </thead>
+                                                <tbody>
+                                                    {createdUsers.map((u, i) => (
+                                                        <tr key={i} className="border-b border-gray-100 dark:border-slate-800 last:border-0">
+                                                            <td className="py-2 pr-4">{u.name}</td>
+                                                            <td className="py-2 pr-4">{u.email}</td>
+                                                            <td className="py-2 pr-4 font-mono text-blue-600 dark:text-blue-400">{u.password}</td>
+                                                            <td className="py-2">{u.role}</td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                        <div className="mt-6 flex justify-end">
+                                            <button
+                                                onClick={() => setIsBulkCreateOpen(false)}
+                                                className="px-4 py-2 bg-gray-200 dark:bg-slate-700 text-gray-800 dark:text-white rounded-lg hover:bg-gray-300 dark:hover:bg-slate-600"
+                                            >
+                                                Close
+                                            </button>
+                                        </div>
                                     </div>
-                                    <div className="mt-6 flex justify-end">
-                                        <button
-                                            onClick={() => setIsBulkCreateOpen(false)}
-                                            className="px-4 py-2 bg-gray-200 dark:bg-slate-700 text-gray-800 dark:text-white rounded-lg hover:bg-gray-300 dark:hover:bg-slate-600"
-                                        >
-                                            Close
-                                        </button>
+                                    <div className="text-center py-8">
+                                        <div className="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-green-100 dark:bg-green-900/30 mb-4">
+                                            <CheckCircle className="h-8 w-8 text-green-600 dark:text-green-400" />
+                                        </div>
+                                        <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">Users Created Successfully!</h3>
+                                        <p className="text-gray-500 dark:text-gray-400 mb-6">
+                                            {createdUsers.length} users have been added to the system.
+                                        </p>
+
+                                        <div className="flex justify-center gap-4">
+                                            <button
+                                                onClick={() => {
+                                                    const csvContent = "data:text/csv;charset=utf-8,"
+                                                        + "Name,Email,Password,Role\n"
+                                                        + createdUsers.map((u: any) => `${u.name},${u.email},${u.password},${u.role}`).join("\n");
+
+                                                    const encodedUri = encodeURI(csvContent);
+                                                    const link = document.createElement("a");
+                                                    link.setAttribute("href", encodedUri);
+                                                    link.setAttribute("download", `created_users_${new Date().toISOString().slice(0, 10)}.csv`);
+                                                    document.body.appendChild(link);
+                                                    link.click();
+                                                    document.body.removeChild(link);
+                                                }}
+                                                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition flex items-center gap-2"
+                                            >
+                                                <Upload size={18} className="transform rotate-180" /> Download Credentials
+                                            </button>
+                                            <button
+                                                onClick={() => setCreatedUsers([])}
+                                                className="px-4 py-2 bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-slate-600 transition"
+                                            >
+                                                Create More
+                                            </button>
+                                        </div>
+
+                                        <div className="mt-8 text-left max-h-60 overflow-y-auto border rounded-lg border-gray-200 dark:border-slate-700">
+                                            <table className="min-w-full divide-y divide-gray-200 dark:divide-slate-700">
+                                                <thead className="bg-gray-50 dark:bg-slate-800">
+                                                    <tr>
+                                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Name</th>
+                                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Email</th>
+                                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Password</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="bg-white dark:bg-slate-900 divide-y divide-gray-200 dark:divide-slate-700">
+                                                    {createdUsers.map((user: any, idx) => (
+                                                        <tr key={idx}>
+                                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">{user.name}</td>
+                                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{user.email}</td>
+                                                            <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-500 dark:text-gray-400">{user.password}</td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
                                     </div>
                                 </div>
                             ) : (
@@ -711,8 +774,9 @@ const AdminDashboard = () => {
                         </div>
                     </div>
                 </div>
-            )}
-        </div>
+            )
+            }
+        </div >
     );
 };
 

@@ -21,16 +21,43 @@ api.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
+// Simple in-memory cache
+const cache = new Map<string, { timestamp: number, response: any }>();
+const CACHE_TTL = 45 * 1000; // 45 seconds
+
+const cachedGet = async (url: string, config?: any) => {
+  const token = localStorage.getItem('token');
+  // Include token in key to segregate cache by user
+  const key = `${token || 'anon'}:${url}:${JSON.stringify(config?.params || {})}`;
+
+  const cached = cache.get(key);
+  if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+    // Return a deep copy to prevent mutation of cached data
+    return Promise.resolve(JSON.parse(JSON.stringify(cached.response)));
+  }
+
+  try {
+    const response = await api.get(url, config);
+    cache.set(key, { timestamp: Date.now(), response });
+    return response;
+  } catch (error) {
+    throw error;
+  }
+};
+
 export const auth = {
   login: (credentials: any) => api.post('/auth/login', credentials),
   signup: (data: any) => api.post('/auth/signup', data),
-  getMe: () => api.get('/auth/me'),
-  logout: () => api.post('/auth/logout'),
+  getMe: () => cachedGet('/auth/me'),
+  logout: () => {
+    cache.clear();
+    return api.post('/auth/logout');
+  },
 };
 
 export const questions = {
-  getAll: (params?: any) => api.get('/questions', { params }),
-  getById: (id: string) => api.get(`/questions/${id}`),
+  getAll: (params?: any) => cachedGet('/questions', { params }),
+  getById: (id: string) => cachedGet(`/questions/${id}`),
   create: (data: any) => api.post('/questions', data),
   update: (id: string, data: any) => api.put(`/questions/${id}`, data),
   delete: (id: string) => api.delete(`/questions/${id}`),
@@ -44,36 +71,36 @@ export const answers = {
 };
 
 export const users = {
-  getById: (id: string) => api.get(`/users/${id}`),
+  getById: (id: string) => cachedGet(`/users/${id}`),
   updateProfile: (data: any) => api.put('/users/profile', data),
-  getSpecialists: () => api.get('/users/specialists'),
-  getAll: (params?: any) => api.get('/admin/users', { params }), // Optimistic
+  getSpecialists: () => cachedGet('/users/specialists'),
+  getAll: (params?: any) => cachedGet('/admin/users', { params }),
 };
 
 export const admin = {
-  getStats: () => api.get('/admin/stats'), // Updated to real endpoint
-  getReports: (status = 'pending') => api.get('/moderation/reports', { params: { status } }),
-  getBlockedWords: () => api.get('/moderation/blocked-words'),
+  getStats: () => cachedGet('/admin/stats'),
+  getReports: (status = 'pending', params?: any) => cachedGet('/moderation/reports', { params: { status, ...params } }),
+  getBlockedWords: () => cachedGet('/moderation/blocked-words'),
   addBlockedWords: (words: string[]) => api.post('/moderation/blocked-words', { words }),
   removeBlockedWord: (word: string) => api.delete(`/moderation/blocked-words/${word}`),
   bulkCreateUsers: (users: any[]) => api.post('/auth/bulk-create', { users }),
 
   // New Moderation Endpoints
   takeAction: (data: any) => api.post('/moderation/action', data),
-  getFlaggedContent: () => api.get('/moderation/flagged'),
+  getFlaggedContent: () => cachedGet('/moderation/flagged'),
   scanContent: (content: string) => api.post('/moderation/scan', { content }),
   removeItem: (type: string, id: string) => api.post(`/moderation/remove/${type}/${id}`),
   banUser: (userId: string) => api.post(`/moderation/ban/${userId}`),
   unbanUser: (userId: string) => api.post(`/moderation/unban/${userId}`),
-  getSystemStats: () => api.get('/moderation/stats'),
-  getLogs: () => api.get('/moderation/logs'),
-  checkHealth: () => api.get('/health'),
+  getSystemStats: () => cachedGet('/moderation/stats'),
+  getLogs: () => cachedGet('/moderation/logs'),
+  checkHealth: () => cachedGet('/health'),
   approveUser: (userId: string) => api.patch(`/admin/users/${userId}/approve`),
   bulkApproveUsers: (userIds: string[]) => api.post('/admin/users/bulk-approve', { userIds }),
 };
 
 export const tags = {
-  getAll: () => api.get('/tags'),
+  getAll: () => cachedGet('/tags'),
 };
 
 export default api;

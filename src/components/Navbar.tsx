@@ -4,7 +4,6 @@ import {
   LogOut,
   Menu,
   Moon,
-  Settings,
   Sun,
   User,
   X,
@@ -120,9 +119,6 @@ export default function Navbar({ darkMode, toggleDarkMode }: NavbarProps) {
                     <Link to="/profile" className="flex items-center gap-2 px-4 py-2 hover:bg-gray-100">
                       <User size={16} /> Profile
                     </Link>
-                    <Link to="/settings" className="flex items-center gap-2 px-4 py-2 hover:bg-gray-100">
-                      <Settings size={16} /> Settings
-                    </Link>
                     <button
                       onClick={logout}
                       className="flex items-center gap-2 w-full text-left px-4 py-2 hover:bg-gray-100 text-red-600"
@@ -215,7 +211,6 @@ export default function Navbar({ darkMode, toggleDarkMode }: NavbarProps) {
                     {user.name}
                   </div>
                   <Link to="/profile" onClick={() => setMobileOpen(false)} className="block py-1">Profile</Link>
-                  <Link to="/settings" onClick={() => setMobileOpen(false)} className="block py-1">Settings</Link>
                   <button onClick={() => { logout(); setMobileOpen(false); }} className="block py-1 text-left w-full text-red-300">Logout</button>
                 </>
               ) : (
