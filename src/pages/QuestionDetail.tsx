@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { Eye, ArrowLeft, Loader2 } from 'lucide-react';
 import TagChip from '../components/TagChip';
 import AnswerCard from '../components/AnswerCard';
+import Alert from '../components/Alert';
 import { questions as questionApi, answers as answerApi } from '../services/api';
 import { Question } from '../types';
 import { useAuth } from '../context/AuthContext';
@@ -16,6 +17,7 @@ export default function QuestionDetail() {
   const [error, setError] = useState('');
   const [answerText, setAnswerText] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState('');
 
   useEffect(() => {
     const fetchQuestion = async () => {
@@ -25,7 +27,6 @@ export default function QuestionDetail() {
         const { data } = await questionApi.getById(id);
 
         // If user is logged in, check which answers they have upvoted
-        // If user is logged in, check which answers they have upvoted via API
         if (currentUser && data.answers && data.answers.length > 0) {
           try {
             const answerIds = data.answers.map((a: any) => a.id);
@@ -68,8 +69,10 @@ export default function QuestionDetail() {
     e.preventDefault();
     if (!answerText.trim() || !id) return;
 
+    setSubmitError('');
+
     if (answerText.length < 10) {
-      alert("Answer must be at least 10 characters.");
+      setSubmitError("Answer must be at least 10 characters.");
       return;
     }
 
@@ -78,14 +81,12 @@ export default function QuestionDetail() {
       await answerApi.create(id, { content: answerText });
 
       // Reload question to get updated answers
-      // Ideally we would optimistically update, but backend structure might be complex
-      // Simple reload:
       const { data: updatedQuestion } = await questionApi.getById(id);
       setQuestion(updatedQuestion);
       setAnswerText('');
     } catch (err) {
       console.error('Failed to submit answer:', err);
-      alert('Failed to submit answer. Please try again.');
+      setSubmitError('Failed to submit answer. Please try again.');
     } finally {
       setSubmitting(false);
     }
@@ -119,13 +120,9 @@ export default function QuestionDetail() {
 
     try {
       await answerApi.upvote(answerId);
-      // We can rely on optimistic update since backend might not return 'upvotedBy' properly yet
-      // If we re-fetch immediately and backend lacks data, it will flicker back to unliked.
-      // So we skip re-fetching here for a smoother experience, assuming successful call.
-
     } catch (err) {
       console.error("Failed to upvote:", err);
-      // Revert optimistic update on error (optional, but good practice)
+      // Revert optimistic update on error
       const { data: revertedQuestion } = await questionApi.getById(id!);
       setQuestion(revertedQuestion);
     }
@@ -182,15 +179,15 @@ export default function QuestionDetail() {
               <TagChip key={tag} tag={tag} />
             ))}
           </div>
-          <div className="flex items-center gap-4 text-sm text-gray-600 dark:text-slate-400">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-gray-600 dark:text-slate-400">
             <div className="flex items-center gap-2">
               <span>{author.avatar}</span>
               <span className="font-medium">{author.name}</span>
             </div>
-            <span>•</span>
-            <span>{formatDate(question.createdAt)}</span>
-            <span>•</span>
-            <div className="flex items-center gap-1">
+            <span className="hidden sm:inline">•</span>
+            <span className="whitespace-nowrap">{formatDate(question.createdAt)}</span>
+            <span className="hidden sm:inline">•</span>
+            <div className="flex items-center gap-1 whitespace-nowrap">
               <Eye size={16} />
               <span>{question.views} views</span>
             </div>
@@ -232,6 +229,7 @@ export default function QuestionDetail() {
       {currentUser?.role === 'specialist' ? (
         <div className="bg-white dark:bg-slate-800 border border-beige/30 dark:border-slate-700 rounded-lg p-6">
           <h3 className="text-xl font-bold text-gray-900 dark:text-slate-100 mb-4">Your Answer</h3>
+          <Alert message={submitError} type="error" onClose={() => setSubmitError('')} />
           <form onSubmit={handleSubmitAnswer}>
             <textarea
               value={answerText}

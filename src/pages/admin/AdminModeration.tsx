@@ -6,6 +6,7 @@ import {
     Trash,
     Loader2
 } from 'lucide-react';
+import { Virtuoso } from 'react-virtuoso';
 import io from 'socket.io-client';
 import { admin, questions } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
@@ -15,6 +16,7 @@ const AdminModeration = () => {
     const [feedLoading, setFeedLoading] = useState(false);
     const [feedPage, setFeedPage] = useState(1);
     const [feedHasMore, setFeedHasMore] = useState(true);
+    const [isFetchingMore, setIsFetchingMore] = useState(false);
 
     const [blockedWords, setBlockedWords] = useState<string[]>([]);
     const [newBlockedWord, setNewBlockedWord] = useState('');
@@ -54,7 +56,8 @@ const AdminModeration = () => {
     };
 
     const fetchFeed = async (page = 1, append = false) => {
-        setFeedLoading(true);
+        if (page === 1) setFeedLoading(true);
+        else setIsFetchingMore(true);
         try {
             // Using questions endpoint directly as the feed source
             const { data } = await questions.getAll({ page, limit: 20, sort: 'newest' });
@@ -73,6 +76,7 @@ const AdminModeration = () => {
             console.error("Failed to fetch feed", e);
         } finally {
             setFeedLoading(false);
+            setIsFetchingMore(false);
         }
     };
 
@@ -200,20 +204,28 @@ const AdminModeration = () => {
                     </span>
                 </div>
 
-                <div className="divide-y divide-gray-100 dark:divide-slate-700 max-h-[600px] overflow-y-auto">
-                    {contentFeed.length === 0 ? (
-                        <div className="p-12 text-center text-gray-500 dark:text-gray-400">
-                            <div className="flex justify-center mb-4">
-                                <div className="w-16 h-16 bg-blue-50 dark:bg-slate-700 rounded-full flex items-center justify-center animate-pulse">
-                                    <Activity className="text-blue-500" size={32} />
-                                </div>
+                {contentFeed.length === 0 && feedLoading ? (
+                    <div className="flex justify-center p-12">
+                        <Loader2 className="w-10 h-10 animate-spin text-blue-500" />
+                    </div>
+                ) : contentFeed.length === 0 ? (
+                    <div className="p-12 text-center text-gray-500 dark:text-gray-400">
+                        <div className="flex justify-center mb-4">
+                            <div className="w-16 h-16 bg-blue-50 dark:bg-slate-700 rounded-full flex items-center justify-center animate-pulse">
+                                <Activity className="text-blue-500" size={32} />
                             </div>
-                            <p className="text-lg font-medium">Waiting for new activity...</p>
-                            <p className="text-sm mt-1">New posts will appear here instantly.</p>
                         </div>
-                    ) : (
-                        contentFeed.map((item, index) => (
-                            <div key={item.id || index} className="p-6 hover:bg-gray-50 dark:hover:bg-slate-700/30 transition-colors animate-fade-in-up">
+                        <p className="text-lg font-medium">Waiting for new activity...</p>
+                        <p className="text-sm mt-1">New posts will appear here instantly.</p>
+                    </div>
+                ) : (
+                    <Virtuoso
+                        style={{ height: '600px' }}
+                        className="divide-y divide-gray-100 dark:divide-slate-700 overflow-y-auto"
+                        data={contentFeed}
+                        endReached={() => feedHasMore && !isFetchingMore && handleLoadMoreFeed()}
+                        itemContent={(_, item) => (
+                            <div className="p-6 hover:bg-gray-50 dark:hover:bg-slate-700/30 transition-colors animate-fade-in-up">
                                 <div className="flex justify-between items-start gap-4">
                                     <div className="flex-1">
                                         <div className="flex items-center gap-2 mb-2">
@@ -257,25 +269,16 @@ const AdminModeration = () => {
                                     </div>
                                 </div>
                             </div>
-                        ))
-                    )}
-
-                    {feedHasMore && (
-                        <div className="p-4 text-center border-t border-gray-100 dark:border-slate-700">
-                            <button
-                                onClick={handleLoadMoreFeed}
-                                disabled={feedLoading}
-                                className="px-6 py-2 bg-gray-50 dark:bg-slate-700 hover:bg-gray-100 dark:hover:bg-slate-600 text-gray-700 dark:text-gray-300 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
-                            >
-                                {feedLoading ? (
-                                    <span className="flex items-center gap-2">
-                                        <Loader2 className="animate-spin" size={16} /> Loading...
-                                    </span>
-                                ) : 'Load More Activity'}
-                            </button>
-                        </div>
-                    )}
-                </div>
+                        )}
+                        components={{
+                            Footer: () => (
+                                <div className="py-4 flex justify-center min-h-[50px]">
+                                    {isFetchingMore && <Loader2 className="w-6 h-6 animate-spin text-gray-400" />}
+                                </div>
+                            )
+                        }}
+                    />
+                )}
             </div>
         </div>
     );

@@ -1,4 +1,5 @@
-import { Filter, Loader2, Bell, ArrowUp } from 'lucide-react';
+import { Filter, Loader2, ArrowUp } from 'lucide-react';
+import { Virtuoso } from 'react-virtuoso';
 import { useEffect, useState } from 'react';
 import QuestionCard from '../components/QuestionCard';
 import SearchBar from '../components/SearchBar';
@@ -23,10 +24,12 @@ export default function Explore() {
 
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
+  const [isFetchingMore, setIsFetchingMore] = useState(false);
 
   // Consolidated fetch function
   const fetchQuestions = async (pageNumber = 1, append = false) => {
     if (pageNumber === 1) setLoading(true);
+    else setIsFetchingMore(true);
     try {
       const params: any = {
         limit: 20,
@@ -61,6 +64,7 @@ export default function Explore() {
       console.error(err);
     } finally {
       setLoading(false);
+      setIsFetchingMore(false);
     }
   };
 
@@ -227,50 +231,50 @@ export default function Explore() {
           </div>
         )}
 
-        {questions.length === 0 && !loading ? (
+        {questions.length === 0 && loading ? (
+          <div className="flex justify-center p-4">
+            <Loader2 className="w-8 h-8 animate-spin text-indigo-600" />
+          </div>
+        ) : questions.length === 0 ? (
           <div className="text-center py-16 text-gray-600 dark:text-slate-400">
             No questions found satisfying your criteria.
           </div>
         ) : (
-          questions.map((question) => (
-            <div key={question.id}>
-              {/* Divider for "Last Read" */}
-              {question.id === lastReadId && (
-                <div className="flex items-center gap-4 my-6">
-                  <div className="h-px bg-red-200 dark:bg-red-800 flex-1"></div>
-                  <span className="text-sm font-bold text-red-500 dark:text-red-400 uppercase tracking-wider">
-                    Previously Read
-                  </span>
-                  <div className="h-px bg-red-200 dark:bg-red-800 flex-1"></div>
+          <Virtuoso
+            useWindowScroll
+            data={questions}
+            endReached={() => hasMore && !isFetchingMore && handleLoadMore()}
+            itemContent={(_, question) => (
+              <div style={{ paddingBottom: '1.5rem' }}>
+                <div key={question.id}>
+                  {/* Divider for "Last Read" */}
+                  {question.id === lastReadId && (
+                    <div className="flex items-center gap-4 my-6">
+                      <div className="h-px bg-red-200 dark:bg-red-800 flex-1"></div>
+                      <span className="text-sm font-bold text-red-500 dark:text-red-400 uppercase tracking-wider">
+                        Previously Read
+                      </span>
+                      <div className="h-px bg-red-200 dark:bg-red-800 flex-1"></div>
+                    </div>
+                  )}
+
+                  <div className="mb-4">
+                    <QuestionCard
+                      question={question}
+                      author={question.user || { id: 'unknown', name: 'Anonymous', avatar: '👤', role: 'student' }}
+                    />
+                  </div>
                 </div>
-              )}
-
-              <div className="mb-4">
-                <QuestionCard
-                  question={question}
-                  author={question.user || { id: 'unknown', name: 'Anonymous', avatar: '👤', role: 'student' }}
-                />
               </div>
-            </div>
-          ))
-        )}
-
-        {loading && (
-          <div className="flex justify-center p-4">
-            <Loader2 className="w-8 h-8 animate-spin text-indigo-600" />
-          </div>
-        )}
-
-        {/* Load More Button */}
-        {hasMore && !loading && questions.length > 0 && (
-          <div className="flex justify-center mt-4 pb-8">
-            <button
-              onClick={handleLoadMore}
-              className="px-6 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-300 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-700 transition font-medium shadow-sm"
-            >
-              Load More
-            </button>
-          </div>
+            )}
+            components={{
+              Footer: () => (
+                <div className="py-4 flex justify-center min-h-[50px]">
+                  {isFetchingMore && <Loader2 className="w-8 h-8 animate-spin text-indigo-600" />}
+                </div>
+              )
+            }}
+          />
         )}
       </div>
     </div>

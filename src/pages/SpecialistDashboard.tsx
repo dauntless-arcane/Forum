@@ -1,9 +1,11 @@
 import { useState, useEffect, useCallback } from "react";
 import { Loader2 } from "lucide-react";
+import { Virtuoso } from "react-virtuoso";
 import { questions as questionApi, answers as answerApi } from "../services/api";
 import { useAuth } from "../context/AuthContext";
 import { Question } from "../types";
 import { Link } from "react-router-dom";
+import Alert from '../components/Alert';
 
 export default function SpecialistDashboard() {
   const { user } = useAuth();
@@ -13,14 +15,14 @@ export default function SpecialistDashboard() {
   const [filter, setFilter] = useState<"all" | "pending" | "answered">("pending");
   const [replyContent, setReplyContent] = useState<{ [key: string]: string }>({});
   const [submitting, setSubmitting] = useState<{ [key: string]: boolean }>({});
+  const [errorMessages, setErrorMessages] = useState<{ [key: string]: string }>({});
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
-
-  // Socket connection
-
+  const [isFetchingMore, setIsFetchingMore] = useState(false);
 
   const fetchQuestions = useCallback(async (pageNumber = 1, shouldAppend = false) => {
     if (pageNumber === 1) setLoading(true);
+    else setIsFetchingMore(true);
 
     try {
       const params: Record<string, string | number | boolean> = {
@@ -48,6 +50,7 @@ export default function SpecialistDashboard() {
       setError("Failed to load questions");
     } finally {
       setLoading(false);
+      setIsFetchingMore(false);
     }
   }, [filter]);
 
@@ -66,8 +69,11 @@ export default function SpecialistDashboard() {
     const content = replyContent[questionId];
     if (!content || !content.trim()) return;
 
+    // Clear previous errors
+    setErrorMessages(prev => ({ ...prev, [questionId]: '' }));
+
     if (content.length < 10) {
-      alert("Answer must be at least 10 characters.");
+      setErrorMessages(prev => ({ ...prev, [questionId]: "Answer must be at least 10 characters." }));
       return;
     }
 
@@ -77,15 +83,13 @@ export default function SpecialistDashboard() {
 
       // Clear reply
       setReplyContent(prev => ({ ...prev, [questionId]: "" }));
+      setErrorMessages(prev => ({ ...prev, [questionId]: "" }));
 
-      // Refresh questions to show updated status/answers
-      // For "pending" filter, the question should disappear if it becomes answered (backend logic depending)
-      // or we just re-fetch.
       await fetchQuestions();
 
     } catch (err) {
       console.error("Failed to submit answer:", err);
-      alert("Failed to submit answer. Please try again.");
+      setErrorMessages(prev => ({ ...prev, [questionId]: "Failed to submit answer. Please try again." }));
     } finally {
       setSubmitting(prev => ({ ...prev, [questionId]: false }));
     }
@@ -142,87 +146,86 @@ export default function SpecialistDashboard() {
         </div>
       )}
 
-
-
       {/* Questions Sheet */}
-      {questions.length === 0 ? (
+      {questions.length === 0 && !loading ? (
         <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl p-10 text-center text-gray-600 dark:text-slate-400">
           No questions found for this filter.
         </div>
       ) : (
-        <div className="space-y-6">
-          {questions.map((q) => (
-            <div
-              key={q.id}
-              className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl p-6"
-            >
-              <Link to={`/question/${q.id}`} className="block group">
-                <h2 className="font-semibold text-gray-900 dark:text-slate-100 mb-2 group-hover:text-secondary text-xl">
-                  {q.title}
-                </h2>
-              </Link>
+        <Virtuoso
+          useWindowScroll
+          data={questions}
+          endReached={() => hasMore && !isFetchingMore && handleLoadMore()}
+          itemContent={(_, q) => (
+            <div className="pb-6" style={{ paddingBottom: '1.5rem' }}>
+              <div
+                key={q.id}
+                className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl p-6"
+              >
+                <Link to={`/question/${q.id}`} className="block group">
+                  <h2 className="font-semibold text-gray-900 dark:text-slate-100 mb-2 group-hover:text-secondary text-xl">
+                    {q.title}
+                  </h2>
+                </Link>
 
-              <p className="text-gray-600 dark:text-slate-400 mb-4 whitespace-pre-wrap">
-                {q.description}
-              </p>
+                <p className="text-gray-600 dark:text-slate-400 mb-4 whitespace-pre-wrap">
+                  {q.description}
+                </p>
 
-              <div className="flex flex-wrap gap-2 mb-4">
-                {(q.tags || []).map(tag => (
-                  <span key={tag} className="text-xs px-2 py-1 bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-slate-300 rounded">
-                    {tag}
+                <div className="flex flex-wrap gap-2 mb-4">
+                  {(q.tags || []).map(tag => (
+                    <span key={tag} className="text-xs px-2 py-1 bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-slate-300 rounded">
+                      {tag}
+                    </span>
+                  ))}
+                  <span className="text-xs px-2 py-1 text-gray-500">
+                    {new Date(q.createdAt).toLocaleDateString()}
                   </span>
-                ))}
-                <span className="text-xs px-2 py-1 text-gray-500">
-                  {new Date(q.createdAt).toLocaleDateString()}
-                </span>
-              </div>
-
-              {/* Existing Answers count */}
-              {(q.answerCount || (q.answers && q.answers.length > 0)) ? (
-                <div className="mb-4 text-sm text-gray-500">
-                  {q.answerCount ?? q.answers?.length} {(q.answerCount ?? q.answers?.length) === 1 ? 'Answer' : 'Answers'} already
                 </div>
-              ) : null}
 
-              {/* Reply Box */}
-              <textarea
-                value={replyContent[q.id] || ""}
-                onChange={(e) =>
-                  setReplyContent((prev) => ({
-                    ...prev,
-                    [q.id]: e.target.value,
-                  }))
-                }
-                placeholder="Write your professional response..."
-                rows={3}
-                className="w-full p-3 rounded-lg border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-900 text-gray-800 dark:text-slate-200 mb-3 focus:outline-none focus:ring-2 focus:ring-secondary/50 resize-y"
-              />
+                {/* Existing Answers count */}
+                {(q.answerCount || (q.answers && q.answers.length > 0)) ? (
+                  <div className="mb-4 text-sm text-gray-500">
+                    {q.answerCount ?? q.answers?.length} {(q.answerCount ?? q.answers?.length) === 1 ? 'Answer' : 'Answers'} already
+                  </div>
+                ) : null}
 
-              <button
-                onClick={() => handleReply(q.id)}
-                disabled={submitting[q.id] || !replyContent[q.id]?.trim()}
-                className={`px-4 py-2 rounded-lg transition-colors font-medium ${submitting[q.id] || !replyContent[q.id]?.trim()
-                  ? 'bg-gray-300 dark:bg-slate-700 text-gray-500 cursor-not-allowed'
-                  : 'bg-accent text-primary hover:bg-accent/90'
-                  }`}
-              >
-                {submitting[q.id] ? 'Submitting...' : 'Submit Answer'}
-              </button>
-            </div>
-          ))}
+                {/* Reply Box */}
+                <Alert message={errorMessages[q.id]} type="error" onClose={() => setErrorMessages(prev => ({ ...prev, [q.id]: '' }))} />
+                <textarea
+                  value={replyContent[q.id] || ""}
+                  onChange={(e) =>
+                    setReplyContent((prev) => ({
+                      ...prev,
+                      [q.id]: e.target.value,
+                    }))
+                  }
+                  placeholder="Write your professional response..."
+                  rows={3}
+                  className="w-full p-3 rounded-lg border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-900 text-gray-800 dark:text-slate-200 mb-3 focus:outline-none focus:ring-2 focus:ring-secondary/50 resize-y"
+                />
 
-          {/* Load More Button */}
-          {hasMore && (
-            <div className="flex justify-center mt-8 pb-8">
-              <button
-                onClick={handleLoadMore}
-                className="px-6 py-2 bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-slate-300 rounded-lg hover:bg-gray-200 dark:hover:bg-slate-600 transition font-medium"
-              >
-                Load More
-              </button>
+                <button
+                  onClick={() => handleReply(q.id)}
+                  disabled={submitting[q.id] || !replyContent[q.id]?.trim()}
+                  className={`px-4 py-2 rounded-lg transition-colors font-medium ${submitting[q.id] || !replyContent[q.id]?.trim()
+                    ? 'bg-gray-300 dark:bg-slate-700 text-gray-500 cursor-not-allowed'
+                    : 'bg-accent text-primary hover:bg-accent/90'
+                    }`}
+                >
+                  {submitting[q.id] ? 'Submitting...' : 'Submit Answer'}
+                </button>
+              </div>
             </div>
           )}
-        </div>
+          components={{
+            Footer: () => (
+              <div className="py-4 flex justify-center min-h-[50px]">
+                {isFetchingMore && <Loader2 className="w-6 h-6 animate-spin text-gray-400" />}
+              </div>
+            )
+          }}
+        />
       )}
     </div>
   );
