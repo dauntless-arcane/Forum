@@ -298,6 +298,23 @@ router.post('/', authenticate, moderateContent(['title', 'description']), async 
         newQuestion._id = result.insertedId;
         newQuestion.id = result.insertedId.toString();
 
+        // Auto-generate report for moderation warnings
+        if (req.moderationWarnings && req.moderationWarnings.length > 0) {
+            try {
+                await db.collection('reports').insertOne({
+                    reporterId: null, // System
+                    targetType: 'question',
+                    targetId: newQuestion.id,
+                    reason: 'Automated Warning: ' + req.moderationWarnings.join(', '),
+                    details: 'Content flagged by auto-moderation but allowed with warning.',
+                    status: 'pending',
+                    createdAt: new Date(),
+                });
+            } catch (rErr) {
+                console.error('Failed to auto-report question:', rErr);
+            }
+        }
+
         await cacheDel('questions:*');
 
         res.status(201).json({

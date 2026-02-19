@@ -32,13 +32,73 @@ router.get('/stats', async (req, res) => {
 
         res.json({
             totalUsers,
-            newPosts, // Questions in last 24h
+            newPosts, // Questions in last 24h,
             pendingReports,
             specialistsCount
         });
     } catch (err) {
         console.error('Get admin stats error:', err);
         res.status(500).json({ error: 'Failed to fetch dashboard statistics.' });
+    }
+});
+
+// ──────────────── GET /api/admin/questions ────────────────
+router.get('/questions', async (req, res) => {
+    try {
+        const { page = 1, limit = 20, search, status } = req.query;
+        const pageNum = Math.max(1, parseInt(page));
+        const limitNum = Math.min(50, Math.max(1, parseInt(limit)));
+        const skip = (pageNum - 1) * limitNum;
+
+        const db = getDB();
+        const filter = {}; // Show ALL, including removed
+
+        if (status) filter.status = status;
+
+        if (search) {
+            filter.$or = [
+                { title: { $regex: search, $options: 'i' } },
+                { description: { $regex: search, $options: 'i' } }
+            ];
+        }
+
+        const [questions, total] = await Promise.all([
+            db.collection('questions')
+                .find(filter)
+                .sort({ createdAt: -1 })
+                .skip(skip)
+                .limit(limitNum)
+                .toArray(),
+            db.collection('questions').countDocuments(filter)
+        ]);
+
+        // Fetch authors
+        const userIds = [...new Set(questions.map(q => q.userId))];
+        const users = await db.collection('users')
+            .find({ _id: { $in: userIds.map(id => new ObjectId(id)) } }, { projection: { password: 0 } })
+            .toArray();
+
+        const userMap = {};
+        users.forEach(u => userMap[u._id.toString()] = u);
+
+        const result = questions.map(q => ({
+            ...q,
+            id: q._id.toString(),
+            user: userMap[q.userId] || null
+        }));
+
+        res.json({
+            questions: result,
+            pagination: {
+                page: pageNum,
+                limit: limitNum,
+                total,
+                totalPages: Math.ceil(total / limitNum)
+            }
+        });
+    } catch (err) {
+        console.error('Admin get questions error:', err);
+        res.status(500).json({ error: 'Failed to fetch admin questions.' });
     }
 });
 

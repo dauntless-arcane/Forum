@@ -57,6 +57,31 @@ const userSchema = {
                     bsonType: 'objectId'
                 },
                 description: 'Array of upvoted answer IDs'
+            },
+            warnings: {
+                bsonType: 'array',
+                items: {
+                    bsonType: 'object',
+                    required: ['reason', 'date', 'seen'],
+                    properties: {
+                        reason: { bsonType: 'string' },
+                        date: { bsonType: 'date' },
+                        seen: { bsonType: 'bool' }
+                    }
+                },
+                description: 'User moderate warnings'
+            },
+            createdAt: {
+                bsonType: 'date'
+            },
+            updatedAt: {
+                bsonType: 'date'
+            },
+            lastLogin: {
+                bsonType: 'date'
+            },
+            bulkCreated: {
+                bsonType: 'bool'
             }
         }
     }

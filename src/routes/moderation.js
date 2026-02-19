@@ -2,6 +2,7 @@ const express = require('express');
 const { getDB } = require('../config/database');
 const { cacheSet, cacheDel } = require('../config/redis');
 const { authenticate, authorize } = require('../middleware/auth');
+const { ObjectId } = require('mongodb');
 
 const router = express.Router();
 
@@ -104,18 +105,93 @@ router.post('/report', authenticate, async (req, res) => {
 
 router.get('/reports', authenticate, authorize('admin'), async (req, res) => {
     try {
-        const { status = 'pending' } = req.query;
+        const { status = 'pending', page = 1, limit = 20 } = req.query;
+        const pageNum = Math.max(1, parseInt(page));
+        const limitNum = Math.min(100, Math.max(1, parseInt(limit)));
+        const skip = (pageNum - 1) * limitNum;
+
         const db = getDB();
 
-        const reports = await db.collection('reports')
-            .find({ status })
-            .sort({ createdAt: -1 })
-            .toArray();
+        const [reports, total] = await Promise.all([
+            db.collection('reports')
+                .find({ status })
+                .sort({ createdAt: -1 })
+                .skip(skip)
+                .limit(limitNum)
+                .toArray(),
+            db.collection('reports').countDocuments({ status })
+        ]);
 
-        res.json(reports);
+        // Enrich reports with reporter and target details if needed
+        // For now, returning raw reports is faster, frontend can fetch details if needed
+        // or we can doing a $lookup. Let's do a basic user lookup for the reporter.
+
+        const reporterIds = [...new Set(reports.map(r => r.reporterId).filter(id => id))];
+        let reporters = [];
+        if (reporterIds.length > 0) {
+            try {
+                reporters = await db.collection('users')
+                    .find({ _id: { $in: reporterIds.map(id => new ObjectId(id)) } })
+                    .project({ name: 1, email: 1, avatar: 1 })
+                    .toArray();
+            } catch (e) { /* ignore invalid ids */ }
+        }
+
+        const reporterMap = {};
+        reporters.forEach(u => reporterMap[u._id.toString()] = u);
+
+        const enrichedReports = reports.map(r => ({
+            ...r,
+            reporter: r.reporterId ? (reporterMap[r.reporterId] || { name: 'Unknown' }) : { name: 'System (Auto)' }
+        }));
+
+        res.json({
+            reports: enrichedReports,
+            pagination: {
+                page: pageNum,
+                limit: limitNum,
+                total,
+                totalPages: Math.ceil(total / limitNum)
+            }
+        });
     } catch (err) {
         console.error('Get reports error:', err);
         res.status(500).json({ error: 'Failed to fetch reports.' });
+    }
+});
+
+// ──────────────── GET /api/moderation/logs ────────────────
+router.get('/logs', authenticate, authorize('admin'), async (req, res) => {
+    try {
+        const { page = 1, limit = 20 } = req.query;
+        const pageNum = Math.max(1, parseInt(page));
+        const limitNum = Math.min(100, Math.max(1, parseInt(limit)));
+        const skip = (pageNum - 1) * limitNum;
+
+        const db = getDB();
+
+        const [logs, total] = await Promise.all([
+            db.collection('moderation_logs')
+                .find({})
+                .sort({ createdAt: -1 })
+                .skip(skip)
+                .limit(limitNum)
+                .toArray(),
+            db.collection('moderation_logs').countDocuments({})
+        ]);
+
+        res.json({
+            logs,
+            pagination: {
+                page: pageNum,
+                limit: limitNum,
+                total,
+                totalPages: Math.ceil(total / limitNum)
+            }
+        });
+    } catch (err) {
+        console.error('Get moderation logs error:', err);
+        res.status(500).json({ error: 'Failed to fetch moderation logs.' });
     }
 });
 

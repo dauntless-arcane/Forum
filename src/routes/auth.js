@@ -77,14 +77,18 @@ router.post('/signup', moderateContent(['name', 'profession', 'expertise']), asy
             email: email.toLowerCase().trim(),
             password: hashedPassword,
             role: userRole,
-            avatar: avatar || defaultAvatar, // Use provided avatar or default emoji
-            profession: profession || undefined, // Optional for specialists
-            expertise: expertise || [], // Optional for specialists
-            verified: userRole === 'specialist' ? false : true, // Specialists require manual verification
+            verified: userRole === 'specialist' ? false : true,
+            avatar: avatar || defaultAvatar,
+            upvotedAnswers: [],
+            warnings: [],
             banned: false,
+            // banReason: null, // Omit to avoid validation complexity if any
             createdAt: new Date(),
             updatedAt: new Date(),
         };
+
+        if (profession) newUser.profession = profession;
+        if (expertise) newUser.expertise = expertise;
 
         const result = await db.collection('users').insertOne(newUser);
         newUser._id = result.insertedId;
@@ -98,6 +102,9 @@ router.post('/signup', moderateContent(['name', 'profession', 'expertise']), asy
         });
     } catch (err) {
         console.error('Signup error:', err);
+        if (err.code === 121) {
+            console.error('Validation failure details:', JSON.stringify(err.errInfo, null, 2));
+        }
         res.status(500).json({ error: 'Failed to create account.' });
     }
 });

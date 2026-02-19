@@ -81,6 +81,23 @@ router.post('/:questionId', authenticate, authorize('specialist', 'admin'), mode
         newAnswer._id = result.insertedId;
         newAnswer.id = result.insertedId.toString();
 
+        // Auto-generate report for moderation warnings
+        if (req.moderationWarnings && req.moderationWarnings.length > 0) {
+            try {
+                await db.collection('reports').insertOne({
+                    reporterId: null, // System
+                    targetType: 'answer',
+                    targetId: newAnswer.id,
+                    reason: 'Automated Warning: ' + req.moderationWarnings.join(', '),
+                    details: 'Content flagged by auto-moderation but allowed with warning.',
+                    status: 'pending',
+                    createdAt: new Date(),
+                });
+            } catch (rErr) {
+                console.error('Failed to auto-report answer:', rErr);
+            }
+        }
+
         // Update question answer count and status
         const answerCount = await db.collection('answers').countDocuments({
             questionId,
