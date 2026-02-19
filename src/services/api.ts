@@ -54,7 +54,7 @@ export const auth = {
 };
 
 export const questions = {
-  getAll: (params?: Record<string, string | number>) => api.get<{ questions: Question[] }>('/questions', { params }),
+  getAll: (params?: Record<string, string | number | boolean>) => api.get<{ questions: Question[] }>('/questions', { params }),
   getById: (id: string) => api.get(`/questions/${id}`),
   create: (data: Partial<Question>) => api.post<Question>('/questions', data),
   update: (id: string, data: Partial<Question>) => api.put<Question>(`/questions/${id}`, data),
@@ -62,7 +62,7 @@ export const questions = {
 };
 
 export const answers = {
-  create: (questionId: string, data: { content: string }) => api.post<Answer>(`/answers/${questionId}`, data),
+  create: (questionId: string, data: { content: string }) => api.post<Answer>(`/questions/${questionId}/answers`, data),
   upvote: (id: string) => api.post(`/answers/${id}/upvote`),
   markBest: (id: string) => api.post(`/answers/${id}/best`),
   checkUpvoted: (answerIds: string[]) => api.post(`/answers/check-upvotes`, { answerIds }),
