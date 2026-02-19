@@ -7,11 +7,18 @@ import Dashboard from './pages/Dashboard';
 import Explore from './pages/Explore';
 import QuestionDetail from './pages/QuestionDetail';
 import SpecialistDashboard from "./pages/SpecialistDashboard";
-import AdminDashboard from "./pages/AdminDashboard";
 import Specialists from "./pages/Specialists";
 import Login from './pages/Login';
 import Signup from './pages/Signup';
 import Profile from './pages/Profile';
+import ProtectedRoute from './components/ProtectedRoute';
+
+// Admin Pages
+import AdminLayout from "./pages/admin/AdminLayout";
+import AdminOverview from "./pages/admin/AdminOverview";
+import AdminUsers from "./pages/admin/AdminUsers";
+import AdminModeration from "./pages/admin/AdminModeration";
+import AdminReports from "./pages/admin/AdminReports";
 
 function App() {
   const [darkMode, setDarkMode] = useState(() => {
@@ -37,15 +44,29 @@ function App() {
           <Navbar darkMode={darkMode} toggleDarkMode={toggleDarkMode} />
           <Routes>
             <Route path="/" element={<Explore />} />
-            <Route path="/dashboard" element={<Dashboard />} />
-            <Route path="/ask" element={<AskQuestion />} />
-            <Route path="/question/:id" element={<QuestionDetail />} />
-            <Route path="/specialists" element={<Specialists />} />
-            <Route path="/specialist-panel" element={<SpecialistDashboard />} />
             <Route path="/login" element={<Login />} />
             <Route path="/signup" element={<Signup />} />
-            <Route path="/admin" element={<AdminDashboard />} />
-            <Route path="/profile" element={<Profile />} />
+
+            <Route element={<ProtectedRoute />}>
+              <Route path="/dashboard" element={<Dashboard />} />
+              <Route path="/ask" element={<AskQuestion />} />
+              <Route path="/question/:id" element={<QuestionDetail />} />
+              <Route path="/specialists" element={<Specialists />} />
+              <Route path="/profile" element={<Profile />} />
+            </Route>
+
+            <Route element={<ProtectedRoute allowedRoles={['specialist']} />}>
+              <Route path="/specialist-panel" element={<SpecialistDashboard />} />
+            </Route>
+
+            <Route element={<ProtectedRoute allowedRoles={['admin']} />}>
+              <Route path="/admin" element={<AdminLayout />}>
+                <Route index element={<AdminOverview />} />
+                <Route path="users" element={<AdminUsers />} />
+                <Route path="moderation" element={<AdminModeration />} />
+                <Route path="reports" element={<AdminReports />} />
+              </Route>
+            </Route>
           </Routes>
         </div>
       </Router>

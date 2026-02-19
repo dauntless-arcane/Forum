@@ -76,13 +76,13 @@ export default function Profile() {
                             </div>
                         </div>
 
-                        <button
+                        {/* <button
                             onClick={() => setIsEditing(!isEditing)}
                             className="flex items-center gap-2 px-4 py-2 border border-beige/30 dark:border-slate-700 rounded-lg text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors"
                         >
                             <Edit size={16} />
                             {isEditing ? 'Cancel Editing' : 'Edit Profile'}
-                        </button>
+                        </button> */}
                     </div>
 
                     {error && (

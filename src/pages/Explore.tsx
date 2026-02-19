@@ -87,13 +87,10 @@ export default function Explore() {
   }, [sortBy, searchQuery]);
 
   // Initial Fetch & Debounced Search
+  // Initial Fetch & Search
   useEffect(() => {
-    const timeoutId = setTimeout(() => {
-      setPage(1);
-      fetchQuestions(1, false);
-    }, 500);
-
-    return () => clearTimeout(timeoutId);
+    setPage(1);
+    fetchQuestions(1, false);
   }, [searchQuery, sortBy, selectedTags]);
 
   const handleLoadMore = () => {

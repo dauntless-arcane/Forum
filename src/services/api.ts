@@ -22,6 +22,30 @@ api.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
+// Simple in-memory cache
+const cache = new Map<string, { timestamp: number, response: any }>();
+const CACHE_TTL = 45 * 1000; // 45 seconds
+
+const cachedGet = async (url: string, config?: any) => {
+  const token = localStorage.getItem('token');
+  // Include token in key to segregate cache by user
+  const key = `${token || 'anon'}:${url}:${JSON.stringify(config?.params || {})}`;
+
+  const cached = cache.get(key);
+  if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+    // Return a deep copy to prevent mutation of cached data
+    return Promise.resolve(JSON.parse(JSON.stringify(cached.response)));
+  }
+
+  try {
+    const response = await api.get(url, config);
+    cache.set(key, { timestamp: Date.now(), response });
+    return response;
+  } catch (error) {
+    throw error;
+  }
+};
+
 export const auth = {
   login: (credentials: { email: string; password: string }) => api.post<AuthResponse>('/auth/login', credentials),
   signup: (data: Partial<User> & { password: string }) => api.post<AuthResponse>('/auth/signup', data),
@@ -52,9 +76,9 @@ export const users = {
 };
 
 export const admin = {
-  getStats: () => api.get('/moderation/stats'), // Updated to real endpoint
-  getReports: (status = 'pending') => api.get('/moderation/reports', { params: { status } }),
-  getBlockedWords: () => api.get('/moderation/blocked-words'),
+  getStats: () => cachedGet('/admin/stats'),
+  getReports: (status = 'pending', params?: any) => cachedGet('/moderation/reports', { params: { status, ...params } }),
+  getBlockedWords: () => cachedGet('/moderation/blocked-words'),
   addBlockedWords: (words: string[]) => api.post('/moderation/blocked-words', { words }),
   removeBlockedWord: (word: string) => api.delete(`/moderation/blocked-words/${word}`),
   bulkCreateUsers: (users: Partial<User>[]) => api.post('/auth/bulk-create', { users }),
@@ -66,13 +90,15 @@ export const admin = {
   removeItem: (type: string, id: string) => api.post(`/moderation/remove/${type}/${id}`),
   banUser: (userId: string) => api.post(`/moderation/ban/${userId}`),
   unbanUser: (userId: string) => api.post(`/moderation/unban/${userId}`),
-  getSystemStats: () => api.get('/moderation/stats'),
-  getLogs: () => api.get('/moderation/logs'),
-  checkHealth: () => api.get('/health'),
+  getSystemStats: () => cachedGet('/moderation/stats'),
+  getLogs: () => cachedGet('/moderation/logs'),
+  checkHealth: () => cachedGet('/health'),
+  approveUser: (userId: string) => api.patch(`/admin/users/${userId}/approve`),
+  bulkApproveUsers: (userIds: string[]) => api.post('/admin/users/bulk-approve', { userIds }),
 };
 
 export const tags = {
-  getAll: () => api.get('/tags'),
+  getAll: () => cachedGet('/tags'),
 };
 
 export default api;
