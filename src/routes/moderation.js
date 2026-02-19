@@ -122,27 +122,60 @@ router.get('/reports', authenticate, authorize('admin'), async (req, res) => {
             db.collection('reports').countDocuments({ status })
         ]);
 
-        // Enrich reports with reporter and target details if needed
-        // For now, returning raw reports is faster, frontend can fetch details if needed
-        // or we can doing a $lookup. Let's do a basic user lookup for the reporter.
-
+        // Enrich reports with reporter and target details
         const reporterIds = [...new Set(reports.map(r => r.reporterId).filter(id => id))];
-        let reporters = [];
-        if (reporterIds.length > 0) {
+
+        // Collect target IDs by type
+        const userIds = [];
+        const questionIds = [];
+        const answerIds = [];
+
+        reports.forEach(r => {
             try {
-                reporters = await db.collection('users')
-                    .find({ _id: { $in: reporterIds.map(id => new ObjectId(id)) } })
-                    .project({ name: 1, email: 1, avatar: 1 })
-                    .toArray();
+                if (!r.targetId) return;
+                const id = new ObjectId(r.targetId);
+
+                if (r.targetType === 'user') userIds.push(id);
+                if (r.targetType === 'question') questionIds.push(id);
+                if (r.targetType === 'answer') answerIds.push(id);
             } catch (e) { /* ignore invalid ids */ }
-        }
+        });
+
+        const [reporters, targetUsers, targetQuestions, targetAnswers] = await Promise.all([
+            // Fetch reporters
+            reporterIds.length > 0
+                ? db.collection('users').find({ _id: { $in: reporterIds.map(id => new ObjectId(id)) } }).project({ name: 1, email: 1, avatar: 1 }).toArray()
+                : [],
+            // Fetch target users
+            userIds.length > 0
+                ? db.collection('users').find({ _id: { $in: userIds } }).project({ name: 1, email: 1, avatar: 1, role: 1 }).toArray()
+                : [],
+            // Fetch target questions
+            questionIds.length > 0
+                ? db.collection('questions').find({ _id: { $in: questionIds } }).project({ title: 1, description: 1, userId: 1 }).toArray()
+                : [],
+            // Fetch target answers
+            answerIds.length > 0
+                ? db.collection('answers').find({ _id: { $in: answerIds } }).project({ content: 1, questionId: 1, userId: 1 }).toArray()
+                : []
+        ]);
 
         const reporterMap = {};
         reporters.forEach(u => reporterMap[u._id.toString()] = u);
 
+        const targetMap = {
+            user: {},
+            question: {},
+            answer: {}
+        };
+        targetUsers.forEach(u => targetMap.user[u._id.toString()] = { ...u, type: 'User' });
+        targetQuestions.forEach(q => targetMap.question[q._id.toString()] = { ...q, type: 'Question' });
+        targetAnswers.forEach(a => targetMap.answer[a._id.toString()] = { ...a, type: 'Answer' });
+
         const enrichedReports = reports.map(r => ({
             ...r,
-            reporter: r.reporterId ? (reporterMap[r.reporterId] || { name: 'Unknown' }) : { name: 'System (Auto)' }
+            reporter: r.reporterId ? (reporterMap[r.reporterId] || { name: 'Unknown' }) : { name: 'System (Auto)' },
+            target: targetMap[r.targetType] ? (targetMap[r.targetType][r.targetId] || null) : null
         }));
 
         res.json({

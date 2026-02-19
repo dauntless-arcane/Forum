@@ -49,7 +49,8 @@ router.get('/', optionalAuth, async (req, res) => {
         const limitNum = Math.min(50, Math.max(1, parseInt(limit)));
         const skip = (pageNum - 1) * limitNum;
 
-        const cacheKey = `questions:${JSON.stringify({ page, limit, tag, status, search, sort, userId })}`;
+        const { ownerOnly } = req.query;
+        const cacheKey = `questions:${JSON.stringify({ page, limit, tag, status, search, sort, userId, ownerOnly })}`;
         const cached = await cacheGet(cacheKey);
 
         if (cached) {
@@ -65,6 +66,15 @@ router.get('/', optionalAuth, async (req, res) => {
         if (tag) filter.tags = tag;
         if (status) filter.status = status;
         if (userId) filter.userId = userId;
+
+        // Handle ownerOnly flag
+        if (req.query.ownerOnly === 'true') {
+            if (!req.user) {
+                return res.status(401).json({ error: 'Authentication required for ownerOnly.' });
+            }
+            filter.userId = req.user._id.toString();
+        }
+
         if (search) filter.$text = { $search: search };
 
         if (req.user?.role === 'admin' && req.query.includeRemoved === 'true') {

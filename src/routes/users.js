@@ -131,14 +131,19 @@ router.get('/:id/questions', optionalAuth, async (req, res) => {
 
         const db = getDB();
 
-        // 🔒 Privacy Check: 
-        // Only the user themselves or an Admin can view the list of questions by a specific user.
-        // This preserves the anonymity of the "Anonymous Student" feature.
+        // 🔒 Privacy Check:
+        // Only the user themselves or an Admin can view the list of questions by a specific user if specific privacy rules apply.
+        // However, public profiles usually show questions. 
+        // Logic: 
+        // - If req.query.ownerOnly is 'true', enforce that req.user is the owner.
+        // - Otherwise, allow public viewing (unless you want strict privacy always).
+
         const isOwner = req.user && req.user._id.toString() === id;
         const isAdmin = req.user && req.user.role === 'admin';
+        const ownerOnly = req.query.ownerOnly === 'true';
 
-        if (!isOwner && !isAdmin) {
-            return res.status(403).json({ error: 'You are not authorized to view this user\'s question history.' });
+        if (ownerOnly && !isOwner && !isAdmin) {
+            return res.status(403).json({ error: 'You are not authorized to view this user\'s reported/private history.' });
         }
 
         const [questions, total] = await Promise.all([
@@ -174,15 +179,24 @@ router.get('/:id/answers', optionalAuth, async (req, res) => {
         const limitNum = Math.min(50, Math.max(1, parseInt(limit)));
         const skip = (pageNum - 1) * limitNum;
 
-        const db = getDB();
+        const isOwner = req.user && req.user._id.toString() === id;
+        const isAdmin = req.user && req.user.role === 'admin';
+        const ownerOnly = req.query.ownerOnly === 'true';
+
+        if (ownerOnly && !isOwner && !isAdmin) {
+            return res.status(403).json({ error: 'You are not authorized to view this user\'s private answer history.' });
+        }
+
+        const query = { userId: id, removed: { $ne: true } };
+
         const [answers, total] = await Promise.all([
             db.collection('answers')
-                .find({ userId: id, removed: { $ne: true } })
+                .find(query)
                 .sort({ createdAt: -1 })
                 .skip(skip)
                 .limit(limitNum)
                 .toArray(),
-            db.collection('answers').countDocuments({ userId: id, removed: { $ne: true } }),
+            db.collection('answers').countDocuments(query),
         ]);
 
         res.json({
