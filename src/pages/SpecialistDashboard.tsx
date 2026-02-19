@@ -27,7 +27,7 @@ export default function SpecialistDashboard() {
         limit: 20,
         page: pageNumber,
         sort: 'newest',
-        ownerOnly: true
+        ownerOnly: false
       };
       if (filter !== 'all') {
         params.status = filter;
@@ -65,6 +65,11 @@ export default function SpecialistDashboard() {
   const handleReply = async (questionId: string) => {
     const content = replyContent[questionId];
     if (!content || !content.trim()) return;
+
+    if (content.length < 10) {
+      alert("Answer must be at least 10 characters.");
+      return;
+    }
 
     setSubmitting(prev => ({ ...prev, [questionId]: true }));
     try {

@@ -68,8 +68,15 @@ export default function QuestionDetail() {
     e.preventDefault();
     if (!answerText.trim() || !id) return;
 
+    if (answerText.length < 10) {
+      alert("Answer must be at least 10 characters.");
+      return;
+    }
+
     setSubmitting(true);
     try {
+      await answerApi.create(id, { content: answerText });
+
       // Reload question to get updated answers
       // Ideally we would optimistically update, but backend structure might be complex
       // Simple reload:

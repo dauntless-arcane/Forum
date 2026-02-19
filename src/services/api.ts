@@ -62,7 +62,7 @@ export const questions = {
 };
 
 export const answers = {
-  create: (questionId: string, data: { content: string }) => api.post<Answer>(`/questions/${questionId}/answers`, data),
+  create: (questionId: string, data: { content: string }) => api.post<Answer>(`/answers/${questionId}`, data),
   upvote: (id: string) => api.post(`/answers/${id}/upvote`),
   markBest: (id: string) => api.post(`/answers/${id}/best`),
   checkUpvoted: (answerIds: string[]) => api.post(`/answers/check-upvotes`, { answerIds }),
