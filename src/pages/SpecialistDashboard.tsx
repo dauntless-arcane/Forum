@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { Loader2, Bell } from "lucide-react";
-import io from 'socket.io-client';
+import { Loader2 } from "lucide-react";
 import { questions as questionApi, answers as answerApi } from "../services/api";
 import { useAuth } from "../context/AuthContext";
 import { Question } from "../types";
@@ -16,40 +15,19 @@ export default function SpecialistDashboard() {
   const [submitting, setSubmitting] = useState<{ [key: string]: boolean }>({});
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
-  const [newUpdate, setNewUpdate] = useState(false);
 
   // Socket connection
-  useEffect(() => {
-    const socket = io(import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:5000');
 
-    socket.on('connect', () => {
-      console.log('Specialist connected to socket');
-      socket.emit('join_specialist_room');
-    });
-
-    socket.on('new_question', (question: Question) => {
-      // If we are looking at pending or all, we can prepend it
-      if (filter !== 'answered') {
-        setQuestions(prev => [question, ...prev]);
-        setNewUpdate(true);
-        // Auto-hide notification after 3s
-        setTimeout(() => setNewUpdate(false), 3000);
-      }
-    });
-
-    return () => {
-      socket.disconnect();
-    };
-  }, [filter]);
 
   const fetchQuestions = useCallback(async (pageNumber = 1, shouldAppend = false) => {
     if (pageNumber === 1) setLoading(true);
 
     try {
-      const params: Record<string, string | number> = {
+      const params: Record<string, string | number | boolean> = {
         limit: 20,
         page: pageNumber,
-        sort: 'newest'
+        sort: 'newest',
+        ownerOnly: true
       };
       if (filter !== 'all') {
         params.status = filter;
@@ -138,7 +116,7 @@ export default function SpecialistDashboard() {
       </h1>
 
       {/* Filter Tabs */}
-      <div className="flex gap-3 mb-8">
+      <div className="flex flex-wrap gap-3 mb-8">
         {["all", "pending", "answered"].map((tab) => (
           <button
             key={tab}
@@ -159,13 +137,7 @@ export default function SpecialistDashboard() {
         </div>
       )}
 
-      {/* New Questions Notification */}
-      {newUpdate && (
-        <div className="mb-6 p-4 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-lg flex items-center gap-3 animate-bounce">
-          <Bell size={20} />
-          <span className="font-medium">New questions have arrived! The list has been updated.</span>
-        </div>
-      )}
+
 
       {/* Questions Sheet */}
       {questions.length === 0 ? (
