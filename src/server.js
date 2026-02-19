@@ -58,7 +58,16 @@ const pubClient = new Redis({
     password: process.env.REDIS_PASSWORD,
     lazyConnect: true // Prevent instant connection, wait for startServer()
 });
+
+pubClient.on('error', (err) => {
+    console.warn('⚠️  Redis Pub Client Error:', err.message);
+});
+
 const subClient = pubClient.duplicate();
+
+subClient.on('error', (err) => {
+    console.warn('⚠️  Redis Sub Client Error:', err.message);
+});
 
 Promise.all([pubClient.connect(), subClient.connect()]).then(() => {
     io.adapter(createAdapter(pubClient, subClient));

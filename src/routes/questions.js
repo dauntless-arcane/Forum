@@ -327,6 +327,13 @@ router.post('/', authenticate, moderateContent(['title', 'description']), async 
 
         await cacheDel('questions:*');
 
+        if (req.io) {
+            console.log(`📡 Emitting 'new_question' event for question: ${newQuestion.id}`);
+            req.io.emit('new_question', { ...newQuestion, user: req.user });
+        } else {
+            console.warn('⚠️ req.io is not defined in POST /api/questions');
+        }
+
         res.status(201).json({
             message: 'Question posted successfully!',
             question: newQuestion,

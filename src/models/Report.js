@@ -7,7 +7,7 @@ const reportSchema = {
         required: ['reporterId', 'targetType', 'targetId', 'reason', 'status', 'createdAt'],
         properties: {
             reporterId: {
-                bsonType: 'string',
+                bsonType: ['string', 'null'],
                 description: 'User ID of the reporter'
             },
             targetType: {

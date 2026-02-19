@@ -121,8 +121,14 @@ router.post('/:questionId', authenticate, authorize('specialist', 'admin'), mode
 
         // Emit real-time event
         if (req.io) {
+            console.log(`📡 Emitting 'new_answer' event for Answer ID: ${newAnswer.id} on Question ID: ${questionId}`);
             req.io.to('specialists').emit('new_answer', { ...newAnswer, user: req.user });
             req.io.to('admin_feed').emit('admin_new_answer', { ...newAnswer, user: req.user });
+
+            // Also emit to the specific question room if you have one (optional/common pattern)
+            // req.io.to(`question_${questionId}`).emit('answer_added', newAnswer);
+        } else {
+            console.warn('⚠️ req.io is not defined in POST /api/answers/:questionId');
         }
 
         res.status(201).json({
