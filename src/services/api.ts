@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { User, Question, Answer, AuthResponse } from '../types';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
@@ -46,35 +47,32 @@ const cachedGet = async (url: string, config?: any) => {
 };
 
 export const auth = {
-  login: (credentials: any) => api.post('/auth/login', credentials),
-  signup: (data: any) => api.post('/auth/signup', data),
-  getMe: () => cachedGet('/auth/me'),
-  logout: () => {
-    cache.clear();
-    return api.post('/auth/logout');
-  },
+  login: (credentials: { email: string; password: string }) => api.post<AuthResponse>('/auth/login', credentials),
+  signup: (data: Partial<User> & { password: string }) => api.post<AuthResponse>('/auth/signup', data),
+  getMe: () => api.get('/auth/me'),
+  logout: () => api.post('/auth/logout'),
 };
 
 export const questions = {
-  getAll: (params?: any) => cachedGet('/questions', { params }),
-  getById: (id: string) => cachedGet(`/questions/${id}`),
-  create: (data: any) => api.post('/questions', data),
-  update: (id: string, data: any) => api.put(`/questions/${id}`, data),
+  getAll: (params?: Record<string, string | number>) => api.get<{ questions: Question[] }>('/questions', { params }),
+  getById: (id: string) => api.get(`/questions/${id}`),
+  create: (data: Partial<Question>) => api.post<Question>('/questions', data),
+  update: (id: string, data: Partial<Question>) => api.put<Question>(`/questions/${id}`, data),
   delete: (id: string) => api.delete(`/questions/${id}`),
 };
 
 export const answers = {
-  create: (questionId: string, data: any) => api.post(`/answers/${questionId}`, data),
+  create: (questionId: string, data: { content: string }) => api.post<Answer>(`/answers/${questionId}`, data),
   upvote: (id: string) => api.post(`/answers/${id}/upvote`),
   markBest: (id: string) => api.post(`/answers/${id}/best`),
   checkUpvoted: (answerIds: string[]) => api.post(`/answers/check-upvotes`, { answerIds }),
 };
 
 export const users = {
-  getById: (id: string) => cachedGet(`/users/${id}`),
-  updateProfile: (data: any) => api.put('/users/profile', data),
-  getSpecialists: () => cachedGet('/users/specialists'),
-  getAll: (params?: any) => cachedGet('/admin/users', { params }),
+  getById: (id: string) => api.get(`/users/${id}`),
+  updateProfile: (data: Partial<User>) => api.put<User>('/users/profile', data),
+  getSpecialists: () => api.get<User[]>('/users/specialists'),
+  getAll: (params?: Record<string, string | number>) => api.get<{ users: User[] }>('/users', { params }), // Optimistic
 };
 
 export const admin = {
@@ -83,11 +81,11 @@ export const admin = {
   getBlockedWords: () => cachedGet('/moderation/blocked-words'),
   addBlockedWords: (words: string[]) => api.post('/moderation/blocked-words', { words }),
   removeBlockedWord: (word: string) => api.delete(`/moderation/blocked-words/${word}`),
-  bulkCreateUsers: (users: any[]) => api.post('/auth/bulk-create', { users }),
+  bulkCreateUsers: (users: Partial<User>[]) => api.post('/auth/bulk-create', { users }),
 
   // New Moderation Endpoints
-  takeAction: (data: any) => api.post('/moderation/action', data),
-  getFlaggedContent: () => cachedGet('/moderation/flagged'),
+  takeAction: (data: Record<string, unknown>) => api.post('/moderation/action', data),
+  getFlaggedContent: () => api.get('/moderation/flagged'),
   scanContent: (content: string) => api.post('/moderation/scan', { content }),
   removeItem: (type: string, id: string) => api.post(`/moderation/remove/${type}/${id}`),
   banUser: (userId: string) => api.post(`/moderation/ban/${userId}`),

@@ -4,7 +4,6 @@ import {
     FileText,
     AlertTriangle,
     Settings,
-    Filter,
     MoreVertical,
     CheckCircle,
     BarChart2,
@@ -14,8 +13,29 @@ import {
     Trash
 } from 'lucide-react';
 import io from 'socket.io-client';
-import { admin, users as userApi, questions } from '../services/api';
-import { useAuth } from '../context/AuthContext';
+import { admin, users as userApi } from '../services/api';
+import { User, Question, Answer, Report } from '../types';
+
+interface UserRow {
+    id: string;
+    name: string;
+    role: string;
+    status: string;
+    joined: string;
+    email?: string;
+    password?: string;
+}
+
+type FeedItem = {
+    id: string;
+    type: 'question' | 'answer';
+    timestamp?: string | Date;
+    createdAt?: string;
+    userId?: User | { name: string; id: string } | string;
+    title?: string;
+    description?: string;
+    content?: string;
+};
 
 const AdminDashboard = () => {
     const [activeTab, setActiveTab] = useState('overview');
@@ -26,17 +46,17 @@ const AdminDashboard = () => {
         { title: 'Pending Reports', value: '0', change: '0%', icon: AlertTriangle, color: 'text-orange-500', bg: 'bg-orange-100 dark:bg-orange-900/20' },
         { title: 'Specialists', value: '0', change: '0%', icon: CheckCircle, color: 'text-purple-500', bg: 'bg-purple-100 dark:bg-purple-900/20' },
     ]);
-    const [recentUsers, setRecentUsers] = useState<any[]>([]);
+    const [recentUsers, setRecentUsers] = useState<UserRow[]>([]);
     const [reportsCount, setReportsCount] = useState(0);
-    const [reports, setReports] = useState<any[]>([]);
+    const [reports, setReports] = useState<Report[]>([]);
     const [isBulkCreateOpen, setIsBulkCreateOpen] = useState(false);
-    const [createdUsers, setCreatedUsers] = useState<any[]>([]);
-    const [contentFeed, setContentFeed] = useState<any[]>([]);
+    const [createdUsers, setCreatedUsers] = useState<Partial<User>[]>([]);
+    const [contentFeed, setContentFeed] = useState<FeedItem[]>([]);
     const [feedPage, setFeedPage] = useState(1);
     const [feedHasMore, setFeedHasMore] = useState(true);
     const [feedLoading, setFeedLoading] = useState(false);
 
-    const handleBulkCreate = async (users: any[]) => {
+    const handleBulkCreate = async (users: Partial<User>[]) => {
         try {
             const { data } = await admin.bulkCreateUsers(users);
             const created = data.users || [];
@@ -145,8 +165,7 @@ const AdminDashboard = () => {
             // Using questions endpoint directly as the feed source
             const { data } = await questions.getAll({ page, limit: 20, sort: 'newest' });
 
-            const questionsList = data.questions || [];
-            const newItems = questionsList.map((q: any) => ({ ...q, type: 'question' }));
+            const newItems: FeedItem[] = questionsList.map((q: Question) => ({ ...q, type: 'question' }));
 
             if (append) {
                 setContentFeed(prev => [...prev, ...newItems]);
@@ -190,12 +209,11 @@ const AdminDashboard = () => {
             newSocket.emit('join_admin_room');
         });
 
-        newSocket.on('admin_new_question', (data: any) => {
-            setContentFeed(prev => [{ ...data, type: 'question', timestamp: new Date() }, ...prev]);
+        newSocket.on('admin_new_question', (data: Question) => {
+            setContentFeed(prev => [{ ...data, type: 'question', timestamp: new Date() } as FeedItem, ...prev]);
         });
-
-        newSocket.on('admin_new_answer', (data: any) => {
-            setContentFeed(prev => [{ ...data, type: 'answer', timestamp: new Date() }, ...prev]);
+        newSocket.on('admin_new_answer', (data: Answer) => {
+            setContentFeed(prev => [{ ...data, type: 'answer', timestamp: new Date() } as FeedItem, ...prev]);
         });
 
         return () => {
@@ -227,26 +245,27 @@ const AdminDashboard = () => {
                 try {
                     const { data } = await userApi.getAll({ limit: 10 });
                     usersList = data.users || [];
-                    setRecentUsers(usersList.map((u: any) => ({
+                    setRecentUsers(usersList.map((u: User) => ({
                         id: u.id,
                         name: u.name,
                         email: u.email,
                         role: u.role.charAt(0).toUpperCase() + u.role.slice(1),
                         status: u.banned ? 'Suspended' : (u.verified ? 'Active' : 'Pending'),
-                        joined: new Date(u.createdAt || Date.now()).toLocaleDateString()
                     })));
-                } catch (e) {
+                } catch {
                     // Fallback to specialists
                     try {
                         const { data } = await userApi.getSpecialists();
-                        setRecentUsers(data.map((u: any) => ({
+                        setRecentUsers(data.map((u: User) => ({
                             id: u.id,
                             name: u.name,
                             role: 'Specialist',
                             status: 'Active',
                             joined: 'Unknown'
                         })));
-                    } catch (err) { }
+                    } catch {
+                        // Ignore errors for fallback
+                    }
                 }
 
                 // Fetch reports
@@ -255,7 +274,7 @@ const AdminDashboard = () => {
                     const fetchedReports = reportsData || [];
                     setReports(fetchedReports);
                     setReportsCount(fetchedReports.length);
-                } catch (e) {
+                } catch {
                     console.error("Failed to fetch reports");
                 }
 
@@ -456,10 +475,12 @@ const AdminDashboard = () => {
                                                             {item.type}
                                                         </span>
                                                         <span className="text-sm text-gray-500 dark:text-gray-400">
-                                                            by <span className="font-medium text-gray-900 dark:text-white">{item.userId?.name || 'Unknown User'}</span>
+                                                            by <span className="font-medium text-gray-900 dark:text-white">
+                                                                {typeof item.userId === 'object' && item.userId ? item.userId.name : 'Unknown User'}
+                                                            </span>
                                                         </span>
                                                         <span className="text-xs text-gray-400">
-                                                            {new Date(item.createdAt || item.timestamp).toLocaleTimeString()}
+                                                            {new Date(item.createdAt || item.timestamp || Date.now()).toLocaleTimeString()}
                                                         </span>
                                                     </div>
 
@@ -473,7 +494,10 @@ const AdminDashboard = () => {
 
                                                 <div className="flex items-center gap-2">
                                                     <button
-                                                        onClick={() => handleBanUser(item.userId?.id || item.userId)}
+                                                        onClick={() => {
+                                                            const uid = typeof item.userId === 'object' && item.userId ? item.userId.id : item.userId;
+                                                            if (typeof uid === 'string') handleBanUser(uid);
+                                                        }}
                                                         className="p-2 text-orange-500 hover:bg-orange-50 dark:hover:bg-orange-900/20 rounded-lg transition-colors"
                                                         title="Ban User"
                                                     >
@@ -534,7 +558,7 @@ const AdminDashboard = () => {
                                                 </td>
                                             </tr>
                                         ) : (
-                                            reports.map((report: any) => (
+                                            reports.map((report: Report) => (
                                                 <tr key={report.id} className="hover:bg-gray-50 dark:hover:bg-slate-700/30 transition-colors">
                                                     <td className="px-6 py-4 whitespace-nowrap">
                                                         <span className="capitalize px-2 py-1 bg-gray-100 dark:bg-slate-700 rounded text-sm">{report.targetType}</span>
@@ -780,8 +804,8 @@ const AdminDashboard = () => {
     );
 };
 
-const BulkCreateForm = ({ onSubmit }: { onSubmit: (users: any[]) => void }) => {
-    const [rows, setRows] = useState([{ name: '', email: '', role: 'student' }]);
+const BulkCreateForm = ({ onSubmit }: { onSubmit: (users: Partial<User>[]) => void }) => {
+    const [rows, setRows] = useState<{ name: string; email: string; role: User['role'] }[]>([{ name: '', email: '', role: 'student' }]);
     const [loading, setLoading] = useState(false);
 
     const addRow = () => {
@@ -798,7 +822,8 @@ const BulkCreateForm = ({ onSubmit }: { onSubmit: (users: any[]) => void }) => {
 
     const updateRow = (index: number, field: string, value: string) => {
         const newRows = [...rows];
-        newRows[index] = { ...newRows[index], [field]: value };
+        // Dynamic assignment
+        newRows[index] = { ...newRows[index], [field]: value } as unknown as { name: string; email: string; role: User['role'] };
         setRows(newRows);
     };
 
@@ -813,7 +838,7 @@ const BulkCreateForm = ({ onSubmit }: { onSubmit: (users: any[]) => void }) => {
             // Supports formats: Name,Email,Role OR Name,Email
             // Ignores header if first row looks like header
             const lines = text.split(/\r?\n/).filter(line => line.trim() !== '');
-            const newRows: any[] = [];
+            const newRows: { name: string; email: string; role: User['role'] }[] = [];
 
             lines.forEach((line, index) => {
                 // Split by comma, handling basic cases only
@@ -827,7 +852,7 @@ const BulkCreateForm = ({ onSubmit }: { onSubmit: (users: any[]) => void }) => {
 
                 const name = parts[0];
                 const email = parts[1];
-                let role = 'student';
+                let role: User['role'] = 'student';
 
                 if (parts.length > 2) {
                     const r = parts[2].toLowerCase();
@@ -866,7 +891,8 @@ const BulkCreateForm = ({ onSubmit }: { onSubmit: (users: any[]) => void }) => {
         if (validRows.length === 0) return;
 
         setLoading(true);
-        await onSubmit(validRows);
+        // Cast rows to Partial<User>[] because we know the structure matches
+        await onSubmit(validRows as unknown as Partial<User>[]);
         setLoading(false);
     };
 
@@ -971,7 +997,7 @@ const BulkCreateForm = ({ onSubmit }: { onSubmit: (users: any[]) => void }) => {
 };
 
 interface SidebarItemProps {
-    icon: any;
+    icon: React.ElementType;
     label: string;
     active: boolean;
     onClick: () => void;
@@ -1001,27 +1027,55 @@ const SidebarItem = ({ icon: Icon, label, active, onClick, badge }: SidebarItemP
     </button>
 );
 
-const UserTable = ({ users, onBan, onApprove }: { users: any[], onBan: (id: string, name: string) => void, onApprove: (id: string) => void }) => {
-    const [openMenuId, setOpenMenuId] = useState<string | null>(null);
-
-    const toggleMenu = (userId: string) => {
-        if (openMenuId === userId) {
-            setOpenMenuId(null);
-        } else {
-            setOpenMenuId(userId);
-        }
-    };
-
-    return (
-        <div className="overflow-visible min-h-[200px]">
-            <table className="w-full text-left border-collapse">
-                <thead className="bg-gray-50 dark:bg-slate-700/50">
-                    <tr>
-                        <th className="px-6 py-4 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">User</th>
-                        <th className="px-6 py-4 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Role</th>
-                        <th className="px-6 py-4 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Status</th>
-                        <th className="px-6 py-4 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Joined</th>
-                        <th className="px-6 py-4 text-right text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Actions</th>
+const UserTable = ({ users }: { users: UserRow[]; }) => (
+    <div className="overflow-x-auto">
+        <table className="w-full">
+            <thead className="bg-gray-50 dark:bg-slate-700/50">
+                <tr>
+                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">User</th>
+                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Role</th>
+                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Status</th>
+                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Joined</th>
+                    <th className="px-6 py-4 text-right text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Actions</th>
+                </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100 dark:divide-slate-700">
+                {users.map((user) => (
+                    <tr key={user.id} className="hover:bg-gray-50 dark:hover:bg-slate-700/30 transition-colors">
+                        <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="flex items-center gap-3">
+                                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-400 to-indigo-500 flex items-center justify-center text-white text-xs font-bold">
+                                    {user.name?.charAt(0) || 'U'}
+                                </div>
+                                <span className="font-medium text-gray-900 dark:text-gray-100">{user.name}</span>
+                            </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                            <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${user.role === 'Specialist'
+                                ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300'
+                                : 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
+                                }`}>
+                                {user.role}
+                            </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                            <span className={`flex items-center gap-1.5 text-sm ${user.status === 'Active' ? 'text-green-600 dark:text-green-400' :
+                                user.status === 'Suspended' ? 'text-red-600 dark:text-red-400' : 'text-orange-500'
+                                }`}>
+                                <span className={`w-1.5 h-1.5 rounded-full ${user.status === 'Active' ? 'bg-green-500' :
+                                    user.status === 'Suspended' ? 'bg-red-500' : 'bg-orange-500'
+                                    }`}></span>
+                                {user.status}
+                            </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                            {user.joined}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-right">
+                            <button className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 p-1 rounded-full hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors">
+                                <MoreVertical size={18} />
+                            </button>
+                        </td>
                     </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 dark:divide-slate-700">
