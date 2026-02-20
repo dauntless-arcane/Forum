@@ -1,11 +1,15 @@
 
+import { useState, useEffect } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import {
     BarChart2,
     Users,
     FileText,
-    AlertTriangle
+    AlertTriangle,
+    Zap
 } from 'lucide-react';
+import { useAuth } from '../../context/AuthContext';
+import { useSocket } from '../../hooks/useSocket';
 
 interface SidebarItemProps {
     icon: any;
@@ -42,8 +46,45 @@ const SidebarItem = ({ icon: Icon, label, active, onClick, badge }: SidebarItemP
 const AdminLayout = () => {
     const navigate = useNavigate();
     const location = useLocation();
+    const { token, isAuthenticated } = useAuth();
 
-    // Simple helper to check active path
+    // Live activity counter
+    const [activityCount, setActivityCount] = useState(0);
+    const [recentEvents, setRecentEvents] = useState<{ type: string; title: string; time: Date }[]>([]);
+
+    // Socket for admin layout (shared connection for live counter)
+    const { socket, connected } = useSocket({
+        authToken: token,
+        enabled: isAuthenticated && !!token,
+        autoJoin: [{ event: 'join_admin_room', payload: token }],
+    });
+
+    useEffect(() => {
+        if (!socket) return;
+
+        const handleAnyEvent = (data: any, eventType: string) => {
+            setActivityCount(prev => prev + 1);
+            setRecentEvents(prev => [
+                { type: eventType, title: data.title || data.content?.slice(0, 30) || 'Activity', time: new Date() },
+                ...prev.slice(0, 4),
+            ]);
+
+            // Auto-clear counter after 30 seconds
+            setTimeout(() => setActivityCount(prev => Math.max(0, prev - 1)), 30000);
+        };
+
+        const onNewQ = (data: any) => handleAnyEvent(data, 'question');
+        const onNewA = (data: any) => handleAnyEvent(data, 'answer');
+
+        socket.on('admin_new_question', onNewQ);
+        socket.on('admin_new_answer', onNewA);
+
+        return () => {
+            socket.off('admin_new_question', onNewQ);
+            socket.off('admin_new_answer', onNewA);
+        };
+    }, [socket]);
+
     const isActive = (path: string) => {
         if (path === '/admin' && location.pathname === '/admin') return true;
         return location.pathname.startsWith(path) && path !== '/admin';
@@ -81,6 +122,7 @@ const AdminLayout = () => {
                         path="/admin/moderation"
                         active={isActive('/admin/moderation')}
                         onClick={() => navigate('/admin/moderation')}
+                        badge={activityCount > 0 ? activityCount.toString() : undefined}
                     />
                     <SidebarItem
                         icon={AlertTriangle}
@@ -90,6 +132,33 @@ const AdminLayout = () => {
                         onClick={() => navigate('/admin/reports')}
                     />
                 </nav>
+
+                {/* Live Activity Ticker */}
+                <div className="border-t border-gray-200 dark:border-slate-700 p-4">
+                    <div className="flex items-center gap-2 mb-3">
+                        <Zap size={16} className={connected ? 'text-green-500' : 'text-gray-400'} />
+                        <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                            Live Activity
+                        </span>
+                        {connected && (
+                            <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+                        )}
+                    </div>
+
+                    {recentEvents.length === 0 ? (
+                        <p className="text-xs text-gray-400 dark:text-gray-500 italic">No recent events</p>
+                    ) : (
+                        <div className="space-y-2">
+                            {recentEvents.map((ev, i) => (
+                                <div key={i} className="flex items-center gap-2 text-xs animate-fade-in-up">
+                                    <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${ev.type === 'question' ? 'bg-blue-500' : 'bg-purple-500'}`} />
+                                    <span className="text-gray-600 dark:text-gray-300 truncate flex-1">{ev.title}</span>
+                                    <span className="text-gray-400 shrink-0">{ev.time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
             </aside>
 
             {/* Main Content */}

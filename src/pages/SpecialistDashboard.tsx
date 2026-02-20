@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { Loader2 } from "lucide-react";
+import { Loader2, ArrowUp } from "lucide-react";
 import { Virtuoso } from "react-virtuoso";
 import { questions as questionApi, answers as answerApi } from "../services/api";
 import { useAuth } from "../context/AuthContext";
@@ -7,9 +7,13 @@ import { Question } from "../types";
 import { Link } from "react-router-dom";
 import Alert from '../components/Alert';
 
+import { useSocket } from '../hooks/useSocket';
+import { LiveToastContainer, useToasts } from '../components/LiveToast';
+
 export default function SpecialistDashboard() {
-  const { user } = useAuth();
+  const { user, token } = useAuth();
   const [questions, setQuestions] = useState<Question[]>([]);
+  const [pendingQuestions, setPendingQuestions] = useState<Question[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [filter, setFilter] = useState<"all" | "pending" | "answered">("pending");
@@ -19,6 +23,19 @@ export default function SpecialistDashboard() {
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const [isFetchingMore, setIsFetchingMore] = useState(false);
+
+  // --- Toast notifications ---
+  const { toasts, addToast, dismissToast } = useToasts();
+
+  // --- Socket connection (authenticated for specialist room) ---
+  const { socket } = useSocket({
+    authToken: token,
+    enabled: !!token,
+    autoJoin: [
+      { event: 'join_specialist_room', payload: token },
+      { event: 'join_explore' },
+    ],
+  });
 
   const fetchQuestions = useCallback(async (pageNumber = 1, shouldAppend = false) => {
     if (pageNumber === 1) setLoading(true);
@@ -44,7 +61,7 @@ export default function SpecialistDashboard() {
         setQuestions(newQuestions);
       }
 
-      setHasMore(newQuestions.length === 20); // Basic check, ideally backend returns 'totalPages' or 'hasMore'
+      setHasMore(newQuestions.length === 20);
     } catch (err) {
       console.error("Failed to fetch questions:", err);
       setError("Failed to load questions");
@@ -58,6 +75,75 @@ export default function SpecialistDashboard() {
     setPage(1);
     fetchQuestions(1, false);
   }, [filter, fetchQuestions]);
+
+  // --- Socket event listeners ---
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleNewQuestion = (data: any) => {
+      // Add to pending queue
+      setPendingQuestions(prev => [data, ...prev]);
+
+      addToast({
+        type: 'new_question',
+        title: data.title || 'New Question',
+        preview: data.description?.slice(0, 80),
+        tags: data.tags,
+        linkTo: data.id ? `/question/${data.id}` : undefined,
+      });
+    };
+
+    const handleNewAnswer = (data: any) => {
+      addToast({
+        type: 'new_answer',
+        title: `New answer on: ${data.questionTitle || 'a question'}`,
+        preview: data.content?.slice(0, 80),
+        tags: data.tags,
+        linkTo: data.questionId ? `/question/${data.questionId}` : undefined,
+      });
+    };
+
+    const handleQuestionUpdated = (data: any) => {
+      setQuestions(prev => prev.map(q => q.id === data.id ? { ...q, ...data } : q));
+
+      addToast({
+        type: 'question_updated',
+        title: data.title || 'Question Updated',
+        tags: data.tags,
+        linkTo: data.id ? `/question/${data.id}` : undefined,
+      });
+    };
+
+    const handleQuestionDeleted = (data: any) => {
+      setQuestions(prev => prev.filter(q => q.id !== data.id));
+      setPendingQuestions(prev => prev.filter(q => q.id !== data.id));
+
+      addToast({
+        type: 'question_deleted',
+        title: 'Question Removed',
+        tags: data.tags,
+      });
+    };
+
+    socket.on('new_question', handleNewQuestion);
+    socket.on('new_answer', handleNewAnswer);
+    socket.on('question_updated', handleQuestionUpdated);
+    socket.on('question_deleted', handleQuestionDeleted);
+
+    return () => {
+      socket.off('new_question', handleNewQuestion);
+      socket.off('new_answer', handleNewAnswer);
+      socket.off('question_updated', handleQuestionUpdated);
+      socket.off('question_deleted', handleQuestionDeleted);
+    };
+  }, [socket, addToast]);
+
+  const handleApplyPending = () => {
+    if (pendingQuestions.length === 0) return;
+    setQuestions(prev => [...pendingQuestions, ...prev]);
+    setPendingQuestions([]);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
   const handleLoadMore = () => {
     const nextPage = page + 1;
@@ -119,10 +205,25 @@ export default function SpecialistDashboard() {
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-8">
+      {/* Live Toast Notifications */}
+      <LiveToastContainer toasts={toasts} onDismiss={dismissToast} />
 
       <h1 className="text-3xl font-bold text-gray-900 dark:text-slate-100 mb-6">
         Specialist Panel
       </h1>
+
+      {/* New Questions Pending Banner */}
+      {pendingQuestions.length > 0 && (
+        <div className="fixed bottom-8 left-1/2 transform -translate-x-1/2 z-50">
+          <button
+            onClick={handleApplyPending}
+            className="flex items-center gap-2 px-6 py-3 bg-purple-600 text-white rounded-full shadow-lg hover:bg-purple-700 transition-all animate-bounce"
+          >
+            <ArrowUp size={18} />
+            <span className="font-bold">{pendingQuestions.length} New Question{pendingQuestions.length > 1 ? 's' : ''}</span>
+          </button>
+        </div>
+      )}
 
       {/* Filter Tabs */}
       <div className="flex flex-wrap gap-3 mb-8">

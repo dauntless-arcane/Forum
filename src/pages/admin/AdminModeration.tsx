@@ -4,12 +4,16 @@ import {
     Activity,
     Users,
     Trash,
-    Loader2
+    Loader2,
+    Eye
 } from 'lucide-react';
 import { Virtuoso } from 'react-virtuoso';
-import io from 'socket.io-client';
 import { admin, questions } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
+import { Link } from 'react-router-dom';
+
+import { useSocket } from '../../hooks/useSocket';
+import { LiveToastContainer, useToasts } from '../../components/LiveToast';
 
 const AdminModeration = () => {
     const [contentFeed, setContentFeed] = useState<any[]>([]);
@@ -21,12 +25,30 @@ const AdminModeration = () => {
     const [blockedWords, setBlockedWords] = useState<string[]>([]);
     const [newBlockedWord, setNewBlockedWord] = useState('');
 
+    // Confirm-action modal state
+    const [actionModal, setActionModal] = useState<{
+        type: 'ban' | 'delete' | null;
+        targetId: string;
+        targetName: string;
+        itemType?: string;
+    }>({ type: null, targetId: '', targetName: '' });
+    const [actionLoading, setActionLoading] = useState(false);
+
     const { token, isAuthenticated } = useAuth();
+
+    // --- Toast notifications ---
+    const { toasts, addToast, dismissToast } = useToasts();
+
+    // --- Socket connection (admin auth) ---
+    const { socket, connected } = useSocket({
+        authToken: token,
+        enabled: isAuthenticated && !!token,
+        autoJoin: [{ event: 'join_admin_room', payload: token }],
+    });
 
     const fetchBlockedWords = async () => {
         try {
             const { data } = await admin.getBlockedWords();
-            // Assuming API returns { words: [...] } or just [...]
             setBlockedWords(Array.isArray(data) ? data : data.words || []);
         } catch (e) {
             console.error("Failed to fetch blocked words", e);
@@ -59,7 +81,6 @@ const AdminModeration = () => {
         if (page === 1) setFeedLoading(true);
         else setIsFetchingMore(true);
         try {
-            // Using questions endpoint directly as the feed source
             const { data } = await questions.getAll({ page, limit: 20, sort: 'newest' });
 
             const questionsList = data.questions || [];
@@ -70,7 +91,6 @@ const AdminModeration = () => {
             } else {
                 setContentFeed(newItems);
             }
-            // If we got fewer items than limit, no more pages
             setFeedHasMore(newItems.length === 20);
         } catch (e) {
             console.error("Failed to fetch feed", e);
@@ -91,59 +111,106 @@ const AdminModeration = () => {
         fetchFeed(nextPage, true);
     };
 
-    const handleDeleteContent = async (type: string, id: string) => {
-        if (!confirm("Are you sure you want to delete this content?")) return;
-        try {
-            await admin.removeItem(type, id);
-            setContentFeed(prev => prev.filter(item => item.id !== id));
-            alert("Content deleted.");
-        } catch (e) {
-            console.error(e);
-            alert("Failed to delete content.");
-        }
+    // --- Confirm action handlers (replacing raw confirm/alert) ---
+    const confirmAction = (type: 'ban' | 'delete', targetId: string, targetName: string, itemType?: string) => {
+        setActionModal({ type, targetId, targetName, itemType });
     };
 
-    const handleBanUser = async (userId: string) => {
-        if (!confirm(`Are you sure you want to ban this user?`)) return;
+    const executeAction = async () => {
+        if (!actionModal.type) return;
+        setActionLoading(true);
         try {
-            await admin.banUser(userId);
-            alert("User banned successfully.");
-        } catch (e) {
-            console.error(e);
-            alert("Failed to ban user.");
-        }
-    };
-
-    useEffect(() => {
-        if (!isAuthenticated || !token) return;
-
-        // Socket connection with auth token
-        const newSocket = io(import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:5000', {
-            auth: {
-                token: `Bearer ${token}`
+            if (actionModal.type === 'delete') {
+                await admin.removeItem(actionModal.itemType || 'question', actionModal.targetId);
+                setContentFeed(prev => prev.filter(item => item.id !== actionModal.targetId));
+            } else if (actionModal.type === 'ban') {
+                await admin.banUser(actionModal.targetId);
             }
-        });
+        } catch (e) {
+            console.error(e);
+            alert(`Failed to ${actionModal.type}.`);
+        } finally {
+            setActionLoading(false);
+            setActionModal({ type: null, targetId: '', targetName: '' });
+        }
+    };
 
-        newSocket.on('connect', () => {
-            console.log("Connected to admin socket");
-            newSocket.emit('join_admin_room');
-        });
+    // --- Socket event listeners ---
+    useEffect(() => {
+        if (!socket) return;
 
-        newSocket.on('admin_new_question', (data: any) => {
+        const handleAdminNewQuestion = (data: any) => {
             setContentFeed(prev => [{ ...data, type: 'question', timestamp: new Date() }, ...prev]);
-        });
 
-        newSocket.on('admin_new_answer', (data: any) => {
+            addToast({
+                type: 'new_question',
+                title: data.title || 'New Question',
+                preview: data.description?.slice(0, 80),
+                tags: data.tags,
+                linkTo: data.id ? `/question/${data.id}` : undefined,
+            });
+        };
+
+        const handleAdminNewAnswer = (data: any) => {
             setContentFeed(prev => [{ ...data, type: 'answer', timestamp: new Date() }, ...prev]);
-        });
+
+            addToast({
+                type: 'admin_new_answer',
+                title: `New answer by ${data.user?.name || 'Unknown'}`,
+                preview: data.content?.slice(0, 80),
+                tags: data.tags,
+                linkTo: data.questionId ? `/question/${data.questionId}` : undefined,
+            });
+        };
+
+        socket.on('admin_new_question', handleAdminNewQuestion);
+        socket.on('admin_new_answer', handleAdminNewAnswer);
 
         return () => {
-            newSocket.disconnect();
+            socket.off('admin_new_question', handleAdminNewQuestion);
+            socket.off('admin_new_answer', handleAdminNewAnswer);
         };
-    }, [isAuthenticated, token]);
+    }, [socket, addToast]);
 
     return (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Live Toast Notifications */}
+            <LiveToastContainer toasts={toasts} onDismiss={dismissToast} />
+
+            {/* Confirm Action Modal */}
+            {actionModal.type && (
+                <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/50 backdrop-blur-sm animate-fade-in-up">
+                    <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl p-6 max-w-md w-full mx-4 border border-gray-200 dark:border-slate-700">
+                        <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2">
+                            {actionModal.type === 'ban' ? '⚠️ Ban User' : '🗑️ Delete Content'}
+                        </h3>
+                        <p className="text-gray-600 dark:text-gray-300 mb-6">
+                            {actionModal.type === 'ban'
+                                ? `Are you sure you want to ban "${actionModal.targetName}"? They will lose access.`
+                                : `Are you sure you want to permanently delete this ${actionModal.itemType || 'content'}?`}
+                        </p>
+                        <div className="flex gap-3 justify-end">
+                            <button
+                                onClick={() => setActionModal({ type: null, targetId: '', targetName: '' })}
+                                className="px-4 py-2 rounded-lg border border-gray-300 dark:border-slate-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={executeAction}
+                                disabled={actionLoading}
+                                className={`px-4 py-2 rounded-lg font-medium text-white transition-colors ${actionModal.type === 'ban'
+                                    ? 'bg-orange-600 hover:bg-orange-700 disabled:bg-orange-400'
+                                    : 'bg-red-600 hover:bg-red-700 disabled:bg-red-400'
+                                    }`}
+                            >
+                                {actionLoading ? 'Processing...' : actionModal.type === 'ban' ? 'Ban User' : 'Delete'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* Blocked Words Panel */}
             <div className="lg:col-span-1 bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-gray-100 dark:border-slate-700 overflow-hidden h-fit">
                 <div className="p-6 border-b border-gray-100 dark:border-slate-700">
@@ -199,8 +266,11 @@ const AdminModeration = () => {
                         </h3>
                         <p className="text-sm text-gray-500 dark:text-gray-400">Real-time stream of new questions and answers.</p>
                     </div>
-                    <span className="px-3 py-1 bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300 text-xs rounded-full font-medium animate-pulse">
-                        • Live
+                    <span className={`px-3 py-1 text-xs rounded-full font-medium ${connected
+                        ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300 animate-pulse'
+                        : 'bg-gray-100 text-gray-500 dark:bg-slate-700 dark:text-gray-400'
+                        }`}>
+                        {connected ? '● Live' : '○ Offline'}
                     </span>
                 </div>
 
@@ -236,7 +306,7 @@ const AdminModeration = () => {
                                                 {item.type}
                                             </span>
                                             <span className="text-sm text-gray-500 dark:text-gray-400">
-                                                by <span className="font-medium text-gray-900 dark:text-white">{item.userId?.name || 'Unknown User'}</span>
+                                                by <span className="font-medium text-gray-900 dark:text-white">{item.userId?.name || item.user?.name || 'Unknown User'}</span>
                                             </span>
                                             <span className="text-xs text-gray-400">
                                                 {new Date(item.createdAt || item.timestamp).toLocaleTimeString()}
@@ -244,23 +314,43 @@ const AdminModeration = () => {
                                         </div>
 
                                         {item.title && (
-                                            <h4 className="font-bold text-gray-800 dark:text-white mb-1">{item.title}</h4>
+                                            <Link to={`/question/${item.id}`} className="block">
+                                                <h4 className="font-bold text-gray-800 dark:text-white mb-1 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">{item.title}</h4>
+                                            </Link>
                                         )}
                                         <p className="text-gray-600 dark:text-gray-300 text-sm line-clamp-2">
                                             {item.description || item.content}
                                         </p>
+
+                                        {/* Tag chips */}
+                                        {item.tags && item.tags.length > 0 && (
+                                            <div className="flex flex-wrap gap-1 mt-2">
+                                                {item.tags.map((tag: string) => (
+                                                    <span key={tag} className="text-[10px] px-2 py-0.5 bg-gray-100 dark:bg-slate-700/50 text-gray-500 dark:text-gray-400 rounded-full">
+                                                        {tag}
+                                                    </span>
+                                                ))}
+                                            </div>
+                                        )}
                                     </div>
 
-                                    <div className="flex items-center gap-2">
+                                    <div className="flex items-center gap-1">
+                                        <Link
+                                            to={`/question/${item.id}`}
+                                            className="p-2 text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
+                                            title="View"
+                                        >
+                                            <Eye size={18} />
+                                        </Link>
                                         <button
-                                            onClick={() => handleBanUser(item.userId?.id || item.userId)}
+                                            onClick={() => confirmAction('ban', item.userId?.id || item.userId, item.userId?.name || item.user?.name || 'this user')}
                                             className="p-2 text-orange-500 hover:bg-orange-50 dark:hover:bg-orange-900/20 rounded-lg transition-colors"
                                             title="Ban User"
                                         >
                                             <Users size={18} />
                                         </button>
                                         <button
-                                            onClick={() => handleDeleteContent(item.type, item.id)}
+                                            onClick={() => confirmAction('delete', item.id, item.title || 'this content', item.type)}
                                             className="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
                                             title="Delete Content"
                                         >
