@@ -5,6 +5,7 @@ const { getDB } = require('../config/database');
 const { cacheDel } = require('../config/redis');
 const { authenticate, authorize } = require('../middleware/auth');
 const { moderateContent, cleanText } = require('../middleware/moderation');
+const { emitToRooms, buildTagRooms } = require('../utils/socketEmitter');
 
 const router = express.Router();
 
@@ -121,14 +122,24 @@ router.post('/:questionId', authenticate, authorize('specialist', 'admin'), mode
 
         // Emit real-time event
         if (req.io) {
-            console.log(`📡 Emitting 'new_answer' event for Answer ID: ${newAnswer.id} on Question ID: ${questionId}`);
-            req.io.to('specialists').emit('new_answer', { ...newAnswer, user: req.user });
-            req.io.to('admin_feed').emit('admin_new_answer', { ...newAnswer, user: req.user });
+            const tags = question.tags || [];
+            const answerPayload = { ...newAnswer, user: req.user, tags };
 
-            // Also emit to the specific question room if you have one (optional/common pattern)
-            // req.io.to(`question_${questionId}`).emit('answer_added', newAnswer);
-        } else {
-            console.warn('⚠️ req.io is not defined in POST /api/answers/:questionId');
+            // Single emit to ALL rooms — Socket.IO deduplicates per .to() chain
+            emitToRooms(req.io, {
+                rooms: ['specialists', 'explore_feed', ...buildTagRooms(tags)],
+                event: 'new_answer',
+                data: answerPayload,
+                tags,
+            });
+
+            // Admin feed uses a different event name, so must be separate
+            emitToRooms(req.io, {
+                rooms: ['admin_feed'],
+                event: 'admin_new_answer',
+                data: answerPayload,
+                tags,
+            });
         }
 
         res.status(201).json({

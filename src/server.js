@@ -49,6 +49,13 @@ const io = new Server(server, {
         methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
         credentials: true,
     },
+    pingTimeout: 30000,
+    pingInterval: 25000,
+    connectTimeout: 10000,
+    maxHttpBufferSize: 1e6,
+    perMessageDeflate: {
+        threshold: 1024,
+    },
 });
 
 // Redis Adapter logic for scaling across multiple instances
@@ -96,6 +103,37 @@ io.on('connection', (socket) => {
     socket.on('join_explore', () => {
         socket.join('explore_feed');
         console.log(`Client ${socket.id} joined explore feed`);
+    });
+
+    socket.on('leave_explore', () => {
+        socket.leave('explore_feed');
+        console.log(`Client ${socket.id} left explore feed`);
+    });
+
+    socket.on('join_tags', (tags) => {
+        if (Array.isArray(tags)) {
+            const joined = [];
+            tags.forEach(tag => {
+                if (typeof tag === 'string') {
+                    socket.join(`tag:${tag}`);
+                    joined.push(tag);
+                }
+            });
+            if (joined.length) console.log(`Client ${socket.id} joined tag rooms: [${joined.join(', ')}]`);
+        }
+    });
+
+    socket.on('leave_tags', (tags) => {
+        if (Array.isArray(tags)) {
+            const left = [];
+            tags.forEach(tag => {
+                if (typeof tag === 'string') {
+                    socket.leave(`tag:${tag}`);
+                    left.push(tag);
+                }
+            });
+            if (left.length) console.log(`Client ${socket.id} left tag rooms: [${left.join(', ')}]`);
+        }
     });
 
     socket.on('join_admin_room', async (token) => {

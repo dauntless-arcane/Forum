@@ -28,11 +28,11 @@ const questionSchema = {
                 }
             },
             views: {
-                bsonType: 'int',
+                bsonType: 'number',
                 minimum: 0
             },
             answerCount: {
-                bsonType: 'int',
+                bsonType: 'number',
                 minimum: 0
             },
             status: {

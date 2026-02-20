@@ -5,6 +5,7 @@ const { getDB } = require('../config/database');
 const { cacheGet, cacheSet, cacheDel } = require('../config/redis');
 const { authenticate, optionalAuth } = require('../middleware/auth');
 const { moderateContent, cleanText } = require('../middleware/moderation');
+const { emitToRooms, buildTagRooms } = require('../utils/socketEmitter');
 
 const router = express.Router();
 
@@ -328,10 +329,14 @@ router.post('/', authenticate, moderateContent(['title', 'description']), async 
         await cacheDel('questions:*');
 
         if (req.io) {
-            console.log(`📡 Emitting 'new_question' event for question: ${newQuestion.id}`);
-            req.io.emit('new_question', { ...newQuestion, user: req.user });
-        } else {
-            console.warn('⚠️ req.io is not defined in POST /api/questions');
+            const tags = newQuestion.tags || [];
+            const rooms = ['explore_feed', ...buildTagRooms(tags)];
+            emitToRooms(req.io, {
+                rooms,
+                event: 'new_question',
+                data: { ...newQuestion, user: req.user },
+                tags,
+            });
         }
 
         res.status(201).json({
@@ -369,10 +374,23 @@ router.put('/:id', authenticate, moderateContent(['title', 'description']), asyn
 
         await db.collection('questions').updateOne({ _id: questionId }, { $set: updates });
 
+        const updatedQuestion = await db.collection('questions').findOne({ _id: questionId });
+
         await cacheDel(`question:${req.params.id}`);
         await cacheDel('questions:*');
 
-        res.json({ message: 'Question updated successfully.' });
+        if (req.io && updatedQuestion) {
+            const tags = updatedQuestion.tags || [];
+            const rooms = ['explore_feed', ...buildTagRooms(tags)];
+            emitToRooms(req.io, {
+                rooms,
+                event: 'question_updated',
+                data: updatedQuestion,
+                tags,
+            });
+        }
+
+        res.json({ message: 'Question updated successfully.', question: updatedQuestion });
 
     } catch (err) {
         console.error('Update question error:', err);
@@ -403,6 +421,17 @@ router.delete('/:id', authenticate, async (req, res) => {
 
         await cacheDel(`question:${req.params.id}`);
         await cacheDel('questions:*');
+
+        if (req.io) {
+            const tags = question.tags || [];
+            const rooms = ['explore_feed', ...buildTagRooms(tags)];
+            emitToRooms(req.io, {
+                rooms,
+                event: 'question_deleted',
+                data: { id: questionId.toString() },
+                tags,
+            });
+        }
 
         res.json({ message: 'Question deleted successfully.' });
 

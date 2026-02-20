@@ -311,7 +311,7 @@ Most endpoints require a Bearer Token. Login to get one, then click **Authorize*
                 post: {
                     tags: ['Questions'],
                     summary: 'Create a new question',
-                    description: "Post a new question. Content is auto-moderated for profanity.\n\n**Available to all logged-in users (Student, Specialist, Admin).**\nIf successful, emits `new_question` event via Socket.IO.",
+                    description: "Post a new question. Content is auto-moderated for profanity.\n\n**Available to all logged-in users (Student, Specialist, Admin).**\n\nEmits `new_question` via Socket.IO to `explore_feed` and all `tag:<name>` rooms. Payload includes `tags[]` and `_ts` timestamp for frontend multi-tag filtering.",
                     requestBody: {
                         required: true,
                         content: {
@@ -349,7 +349,7 @@ Most endpoints require a Bearer Token. Login to get one, then click **Authorize*
                 put: {
                     tags: ['Questions'],
                     summary: 'Update question',
-                    description: 'Update title, description, or tags. Only allowed for the author or admins.',
+                    description: 'Update title, description, or tags. Only allowed for the author or admins.\n\nEmits `question_updated` via Socket.IO to `explore_feed` and all `tag:<name>` rooms with `tags[]` and `_ts`.',
                     parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
                     requestBody: {
                         content: { 'application/json': { schema: { $ref: '#/components/schemas/Question' } } },
@@ -362,7 +362,7 @@ Most endpoints require a Bearer Token. Login to get one, then click **Authorize*
                 delete: {
                     tags: ['Questions'],
                     summary: 'Delete question',
-                    description: 'Soft-delete a question. Only allowed for the author or admins.',
+                    description: 'Soft-delete a question. Only allowed for the author or admins.\n\nEmits `question_deleted` via Socket.IO to `explore_feed` and all `tag:<name>` rooms with `tags[]` and `_ts`.',
                     parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
                     responses: {
                         200: { description: 'Deleted successfully (marked as removed)' },
@@ -374,7 +374,7 @@ Most endpoints require a Bearer Token. Login to get one, then click **Authorize*
                 post: {
                     tags: ['Answers'],
                     summary: 'Post an answer',
-                    description: "Add an answer to a specific question. Emits `new_answer` event via Socket.IO.\n\n**Restricted to Specialists and Admins.**",
+                    description: "Add an answer to a specific question.\n\n**Restricted to Specialists and Admins.**\n\nEmits `new_answer` via Socket.IO to `specialists`, `admin_feed`, `explore_feed`, and all parent question's `tag:<name>` rooms. Payload includes `tags[]` (from parent question) and `_ts` for frontend multi-tag filtering.",
                     security: [{ bearerAuth: [] }],
                     parameters: [{ name: 'questionId', in: 'path', required: true, schema: { type: 'string' }, description: 'ID of the question to answer' }],
                     requestBody: {
@@ -667,54 +667,94 @@ Most endpoints require a Bearer Token. Login to get one, then click **Authorize*
         },
         'x-socketio-events': {
             summary: 'Real-time WebSocket Events',
-            description: 'The server uses Socket.IO to push updates to connected clients. Primarily used for the Specialist Dashboard.',
+            description: 'The server uses Socket.IO to push live updates. All emitted payloads include a `tags[]` array and `_ts` (Unix timestamp) for efficient frontend multi-tag filtering.',
+            standardPayload: {
+                description: 'Every server→client event carries this standard shape',
+                properties: {
+                    tags: { type: 'array', items: { type: 'string' }, description: 'Tags associated with the entity (e.g. question tags)', example: ['mental-health', 'exam-stress'] },
+                    _ts: { type: 'integer', description: 'Emit timestamp (Date.now())', example: 1708000000000 },
+                },
+            },
             channels: {
                 'join_specialist_room': {
                     publish: {
-                        summary: 'Client -> Server: Join Specialist Room',
-                        description: 'Subscribe to updates relevant for specialists (new questions/answers).',
-                        example: 'socket.emit("join_specialist_room");'
+                        summary: 'Client → Server: Join Specialist Room',
+                        description: 'Subscribe to updates relevant for specialists (new questions/answers). Requires JWT token.',
+                        example: 'socket.emit("join_specialist_room", token);'
                     },
                 },
                 'join_explore': {
                     publish: {
-                        summary: 'Client -> Server: Join Explore Feed',
-                        description: 'Subscribe to the public feed of new questions.',
+                        summary: 'Client → Server: Join Explore Feed',
+                        description: 'Subscribe to the public feed of new/updated/deleted questions and new answers.',
                         example: 'socket.emit("join_explore");'
                     },
                 },
-                'new_question': {
-                    subscribe: {
-                        summary: 'Server -> Client: New Question',
-                        description: 'Broadcasted to "specialists" and "explore_feed" rooms when a user posts a new question.',
-                        message: { payload: { $ref: '#/components/schemas/Question' } },
+                'leave_explore': {
+                    publish: {
+                        summary: 'Client → Server: Leave Explore Feed',
+                        description: 'Unsubscribe from the explore feed.',
+                        example: 'socket.emit("leave_explore");'
                     },
                 },
-                'new_answer': {
-                    subscribe: {
-                        summary: 'Server -> Client: New Answer',
-                        description: 'Broadcasted to "specialists" room when a user posts a new answer.',
-                        message: { payload: { $ref: '#/components/schemas/Answer' } },
+                'join_tags': {
+                    publish: {
+                        summary: 'Client → Server: Subscribe to Tag Rooms',
+                        description: 'Join rooms for specific tags to receive only events matching those tags. Send an array of tag strings.',
+                        example: 'socket.emit("join_tags", ["mental-health", "exam-stress"]);'
+                    },
+                },
+                'leave_tags': {
+                    publish: {
+                        summary: 'Client → Server: Unsubscribe from Tag Rooms',
+                        description: 'Leave previously joined tag rooms.',
+                        example: 'socket.emit("leave_tags", ["mental-health"]);'
                     },
                 },
                 'join_admin_room': {
                     publish: {
-                        summary: 'Client -> Server: Join Admin Room',
-                        description: 'Subscribe to updates for the admin dashboard (all new posts, even non-anonymized).',
+                        summary: 'Client → Server: Join Admin Room',
+                        description: 'Subscribe to admin-only events (non-anonymized posts). Requires admin JWT token.',
                         example: 'socket.emit("join_admin_room", token);'
                     },
                 },
-                'admin_new_question': {
+                'new_question': {
                     subscribe: {
-                        summary: 'Server -> Client: New Question (Admin)',
-                        description: 'Broadcasted to "admin_feed" room. Contains full user details.',
+                        summary: 'Server → Client: New Question Posted',
+                        description: 'Emitted to `explore_feed` and all `tag:<name>` rooms when a user posts a new question. Payload includes question data, author info, `tags[]`, and `_ts`.',
+                        rooms: ['explore_feed', 'tag:<name>'],
                         message: { payload: { $ref: '#/components/schemas/Question' } },
+                    },
+                },
+                'question_updated': {
+                    subscribe: {
+                        summary: 'Server → Client: Question Updated',
+                        description: 'Emitted to `explore_feed` and all `tag:<name>` rooms when a question is edited. Payload includes updated question data, `tags[]`, and `_ts`.',
+                        rooms: ['explore_feed', 'tag:<name>'],
+                        message: { payload: { $ref: '#/components/schemas/Question' } },
+                    },
+                },
+                'question_deleted': {
+                    subscribe: {
+                        summary: 'Server → Client: Question Deleted',
+                        description: 'Emitted to `explore_feed` and all `tag:<name>` rooms when a question is soft-deleted. Payload includes `{ id, tags[], _ts }`.',
+                        rooms: ['explore_feed', 'tag:<name>'],
+                        message: { payload: { type: 'object', properties: { id: { type: 'string' }, tags: { type: 'array', items: { type: 'string' } }, _ts: { type: 'integer' } } } },
+                    },
+                },
+                'new_answer': {
+                    subscribe: {
+                        summary: 'Server → Client: New Answer Posted',
+                        description: 'Emitted to `specialists`, `explore_feed`, and all parent question\'s `tag:<name>` rooms. Payload includes answer data, author info, parent question `tags[]`, and `_ts`.',
+                        rooms: ['specialists', 'explore_feed', 'tag:<name>'],
+                        message: { payload: { $ref: '#/components/schemas/Answer' } },
                     },
                 },
                 'admin_new_answer': {
                     subscribe: {
-                        summary: 'Server -> Client: New Answer (Admin)',
-                        description: 'Broadcasted to "admin_feed" room. Contains full user details.',
+                        summary: 'Server → Client: New Answer (Admin)',
+                        description: 'Emitted to `admin_feed` room. Contains full non-anonymized user details, `tags[]`, and `_ts`.',
+                        rooms: ['admin_feed'],
                         message: { payload: { $ref: '#/components/schemas/Answer' } },
                     },
                 },
