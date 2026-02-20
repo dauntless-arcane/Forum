@@ -1,72 +1,103 @@
-# name: Auto Deploy
+name: Backend Release & Docker Build (GitOps)
 
-# on:
-#   push:
-#     branches: [ "main" ]
+on:
+  push:
+    branches:
+      - backend
 
-# jobs:
-#   build-and-deploy:
-#     runs-on: ubuntu-latest
-    
-#     steps:
-#     - name: Checkout code
-#       uses: actions/checkout@v4
+permissions:
+  contents: write
+  packages: write
 
-#     # 1. Login to Docker Hub
-#     - name: Login to Docker Hub
-#       uses: docker/login-action@v3
-#       with:
-#         username: ${{ secrets.DOCKERHUB_USERNAME }}
-#         password: ${{ secrets.DOCKERHUB_TOKEN }}
+jobs:
+  # -----------------------------------------------------------
+  # 1. CREATE BACKEND RELEASE TAG
+  # -----------------------------------------------------------
+  release:
+    runs-on: ubuntu-latest
 
-#     # 2. Build and Push Image
-#     - name: Build and push Docker image
-#       uses: docker/build-push-action@v5
-#       with:
-#         context: .
-#         push: true
-#         tags: ${{ secrets.DOCKERHUB_USERNAME }}/forum-backend:latest
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
 
-#     # 3. Deploy to Server via SSH
-#     - name: Deploy to Server
-#       uses: appleboy/ssh-action@v1.0.3
-#       with:
-#         host: ${{ secrets.SERVER_HOST }}
-#         username: ${{ secrets.SERVER_USER }}
-#         key: ${{ secrets.SSH_PRIVATE_KEY }}
-#         script: |
-#           # Create directory
-#           mkdir -p ~/forum-backend
-#           cd ~/forum-backend
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
 
-#           # Stop existing containers
-#           docker-compose down || true
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
 
-#           # Pull latest image
-#           docker pull ${{ secrets.DOCKERHUB_USERNAME }}/forum-backend:latest
-          
-#     # 4. Transfer .env and docker-compose.prod.yml
-#     - name: Copy Config Files
-#       uses: appleboy/scp-action@v0.1.7
-#       with:
-#         host: ${{ secrets.SERVER_HOST }}
-#         username: ${{ secrets.SERVER_USER }}
-#         key: ${{ secrets.SSH_PRIVATE_KEY }}
-#         source: "docker-compose.prod.yml"
-#         target: "~/forum-backend/docker-compose.yml"
+      - name: Create new backend release tag
+        id: tag
+        run: |
+          echo "🏷️ Generating new backend version tag"
+          git fetch --tags
 
-#     - name: Create .env on Server
-#       uses: appleboy/ssh-action@v1.0.3
-#       with:
-#         host: ${{ secrets.SERVER_HOST }}
-#         username: ${{ secrets.SERVER_USER }}
-#         key: ${{ secrets.SSH_PRIVATE_KEY }}
-#         script: |
-#           cd ~/forum-backend
-#           # Create .env file from GitHub Secret
-#           echo "${{ secrets.ENV_FILE_CONTENT }}" > .env
-#           echo "DOCKER_IMAGE_NAME=${{ secrets.DOCKERHUB_USERNAME }}/forum-backend:latest" >> .env
-          
-#           # Start services
-#           docker-compose up -d --remove-orphans
-#           docker image prune -f
+          latest_tag=$(git tag --list "backend-v*" | sort -V | tail -n 1)
+          if [ -z "$latest_tag" ]; then
+            latest_tag="backend-v0.0.0"
+          fi
+
+          version=${latest_tag#backend-v}
+          major=$(echo $version | cut -d. -f1)
+          minor=$(echo $version | cut -d. -f2)
+          patch=$(echo $version | cut -d. -f3)
+          new_patch=$((patch + 1))
+
+          new_tag="backend-v${major}.${minor}.${new_patch}"
+
+          echo "➡️ New tag: $new_tag"
+          git tag -a "$new_tag" -m "🔖 Auto backend release: $new_tag"
+          git push origin "$new_tag"
+
+          echo "tag=$new_tag" >> $GITHUB_OUTPUT
+
+      - name: Create GitHub Release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ steps.tag.outputs.tag }}
+          release_name: "🚀 Backend Release ${{ steps.tag.outputs.tag }}"
+          body: |
+            Automated backend release.
+            Docker image is built as a multi-arch image (amd64 + arm64).
+
+  # -----------------------------------------------------------
+  # 2. BUILD & PUSH MULTI-ARCH DOCKER IMAGE
+  # -----------------------------------------------------------
+  docker:
+    needs: release
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout backend branch
+        uses: actions/checkout@v4
+        with:
+          ref: backend
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USER }}
+          password: ${{ secrets.DOCKERHUB_PASS }}
+
+      - name: Build & Push Docker Image (multi-arch)
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          platforms: linux/amd64,linux/arm64
+          tags: |
+            ${{ secrets.DOCKERHUB_USER }}/forum-backend:${{ needs.release.outputs.tag }}
+            ${{ secrets.DOCKERHUB_USER }}/forum-backend:backend-latest
