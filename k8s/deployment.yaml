@@ -23,19 +23,19 @@ spec:
           image: mpratyush54/forum-backend:backend-latest
           imagePullPolicy: Always
           ports:
-            - containerPort: 3010
+            - containerPort: 5000
           envFrom:
             - secretRef:
                 name: forum-env
           readinessProbe:
             httpGet:
               path: /metrics
-              port: 3010
+              port: 5000
             initialDelaySeconds: 5
             periodSeconds: 10
           livenessProbe:
             httpGet:
               path: /metrics
-              port: 3010
+              port: 5000
             initialDelaySeconds: 15
             periodSeconds: 20

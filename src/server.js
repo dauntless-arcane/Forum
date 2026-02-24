@@ -45,7 +45,7 @@ const swaggerSpec = require('./config/swagger');
 
 const app = express();
 const server = http.createServer(app);
-const PORT = process.env.PORT;
+const PORT = process.env.PORT || 5000;
 
 
 // ──────────────── REQUEST METRICS TRACKING ────────────────
