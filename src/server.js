@@ -25,7 +25,7 @@ const {
     socketRooms,
     socketBroadcasts,
     redisAdapterStatus
-} = require('./config/metrics');
+} = require('./../config/metrics');
 
 // 🔵 POD IDENTIFICATION FOR SCALING MONITORING
 const POD_NAME = process.env.POD_NAME || 'local';
