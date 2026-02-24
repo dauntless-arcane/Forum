@@ -20,7 +20,7 @@ spec:
     spec:
       containers:
         - name: forum-api
-          image: mpratyush54/forum-api:backend-latest
+          image: mpratyush54/forum-backend:tagname
           imagePullPolicy: Always
           ports:
             - containerPort: 3010
