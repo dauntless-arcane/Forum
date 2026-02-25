@@ -39,6 +39,8 @@ const userRoutes = require('./routes/users');
 const moderationRoutes = require('./routes/moderation');
 const tagRoutes = require('./routes/tags');
 const adminRoutes = require('./routes/admin');
+const configRoutes = require('./routes/config');
+const { launchCheck } = require('./middleware/launchCheck');
 
 const swaggerUi = require('swagger-ui-express');
 const swaggerSpec = require('./config/swagger');
@@ -184,7 +186,7 @@ app.use(cors({
     ],
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'x-admin-bypass-token'],
 }));
 
 
@@ -217,13 +219,14 @@ app.get('/api/health', async (req, res) => {
 
 
 // ──────────────── API Routes ────────────────
-app.use('/api/auth', authRoutes);
-app.use('/api/questions', questionRoutes);
-app.use('/api/answers', answerRoutes);
-app.use('/api/users', userRoutes);
-app.use('/api/moderation', moderationRoutes);
-app.use('/api/tags', tagRoutes);
-app.use('/api/admin', adminRoutes);
+app.use('/api/auth', authRoutes); // Auth decides its own logic (e.g., signups are already guarded)
+app.use('/api/questions', launchCheck, questionRoutes);
+app.use('/api/answers', launchCheck, answerRoutes);
+app.use('/api/users', launchCheck, userRoutes);
+app.use('/api/moderation', launchCheck, moderationRoutes);
+app.use('/api/tags', launchCheck, tagRoutes);
+app.use('/api/admin', launchCheck, adminRoutes);
+app.use('/api/config', configRoutes); // Config manages the launch status itself
 
 
 // ──────────────── 404 Handler ────────────────

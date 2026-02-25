@@ -5,6 +5,7 @@ const { createUserCollection } = require('../models/User');
 const { createAnswerCollection } = require('../models/Answer');
 const { createReportCollection } = require('../models/Report');
 const { createLikesCollection } = require('../models/Likes');
+const { createConfigCollection } = require('../models/Config');
 
 async function initCollections() {
     const db = getDB();
@@ -17,6 +18,7 @@ async function initCollections() {
             createAnswerCollection(),
             createReportCollection(),
             createLikesCollection(),
+            createConfigCollection(),
             initBlockedWords(db),
             initModerationLogs(db)
         ]);

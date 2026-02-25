@@ -289,8 +289,27 @@ router.get('/:id', optionalAuth, async (req, res) => {
 router.post('/', authenticate, moderateContent(['title', 'description']), async (req, res) => {
     try {
         const { title, description, tags } = req.body;
-
         const db = getDB();
+
+        // Check dynamic rate limit from Config
+        const CACHE_KEY = 'config:launch_status';
+        let configStatus = await cacheGet(CACHE_KEY);
+        if (!configStatus) {
+            const configDoc = await db.collection('config').findOne({ _id: 'launch_status' });
+            configStatus = { questionRateLimit: configDoc?.questionRateLimit || 5 };
+            await cacheSet(CACHE_KEY, configStatus, 300);
+        }
+
+        const maxQuestions = configStatus.questionRateLimit || 5;
+        const rateLimitKey = `rate_limit:questions:${req.user._id}`;
+
+        const currentCount = await cacheGet(rateLimitKey);
+        if (currentCount && currentCount >= maxQuestions) {
+            return res.status(429).json({ error: `You have reached the limit of ${maxQuestions} questions per minute. Please wait.` });
+        }
+
+        // Increment user's question count (TTL 60 seconds)
+        await cacheSet(rateLimitKey, (currentCount || 0) + 1, 60);
 
         const newQuestion = {
             userId: req.user._id.toString(),
