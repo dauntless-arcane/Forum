@@ -4,7 +4,7 @@ FROM node:20-alpine AS builder
 WORKDIR /app
 
 COPY package*.json ./
-RUN npm install --registry=https://registry.npmjs.org/ --fetch-retries=5
+RUN rm -f package-lock.json && npm cache clean --force && npm install --registry=https://registry.npmjs.org/ --fetch-timeout=600000 --fetch-retries=5
 
 COPY . .
 RUN npm run build
