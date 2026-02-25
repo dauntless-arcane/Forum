@@ -36,77 +36,79 @@ function generatePassword(length = 10) {
 
 // ──────────────── POST /api/auth/signup ────────────────
 router.post('/signup', moderateContent(['name', 'profession', 'expertise']), async (req, res) => {
-    try {
-        const { name, email, password, role, avatar, profession, expertise } = req.body;
+    // try {
+    //     const { name, email, password, role, avatar, profession, expertise } = req.body;
 
-        // Validation
-        if (!name || !email || !password) {
-            return res.status(400).json({ error: 'Name, email, and password are required.' });
-        }
+    //     // Validation
+    //     if (!name || !email || !password) {
+    //         return res.status(400).json({ error: 'Name, email, and password are required.' });
+    //     }
 
-        if (!validator.isEmail(email)) {
-            return res.status(400).json({ error: 'Invalid email address.' });
-        }
+    //     if (!validator.isEmail(email)) {
+    //         return res.status(400).json({ error: 'Invalid email address.' });
+    //     }
 
-        if (password.length < 6) {
-            return res.status(400).json({ error: 'Password must be at least 6 characters.' });
-        }
+    //     if (password.length < 6) {
+    //         return res.status(400).json({ error: 'Password must be at least 6 characters.' });
+    //     }
 
-        if (name.length < 2 || name.length > 50) {
-            return res.status(400).json({ error: 'Name must be between 2 and 50 characters.' });
-        }
+    //     if (name.length < 2 || name.length > 50) {
+    //         return res.status(400).json({ error: 'Name must be between 2 and 50 characters.' });
+    //     }
 
-        const db = getDB();
+    //     const db = getDB();
 
-        // Check if email already exists
-        const existing = await db.collection('users').findOne({ email: email.toLowerCase() });
-        if (existing) {
-            return res.status(409).json({ error: 'Email already registered.' });
-        }
+    //     // Check if email already exists
+    //     const existing = await db.collection('users').findOne({ email: email.toLowerCase() });
+    //     if (existing) {
+    //         return res.status(409).json({ error: 'Email already registered.' });
+    //     }
 
-        // Hash password
-        const hashedPassword = await bcrypt.hash(password, 12);
+    //     // Hash password
+    //     const hashedPassword = await bcrypt.hash(password, 12);
 
-        // Determine defaults
-        const userRole = role === 'specialist' ? 'specialist' : 'student';
-        const defaultAvatar = userRole === 'specialist' ? '👨‍⚕️' : '👨‍🎓';
+    //     // Determine defaults
+    //     const userRole = role === 'specialist' ? 'specialist' : 'student';
+    //     const defaultAvatar = userRole === 'specialist' ? '👨‍⚕️' : '👨‍🎓';
 
-        // Create user
-        const newUser = {
-            name: name.trim(),
-            email: email.toLowerCase().trim(),
-            password: hashedPassword,
-            role: userRole,
-            verified: userRole === 'specialist' ? false : true,
-            avatar: avatar || defaultAvatar,
-            upvotedAnswers: [],
-            warnings: [],
-            banned: false,
-            // banReason: null, // Omit to avoid validation complexity if any
-            createdAt: new Date(),
-            updatedAt: new Date(),
-        };
+    //     // Create user
+    //     const newUser = {
+    //         name: name.trim(),
+    //         email: email.toLowerCase().trim(),
+    //         password: hashedPassword,
+    //         role: userRole,
+    //         verified: userRole === 'specialist' ? false : true,
+    //         avatar: avatar || defaultAvatar,
+    //         upvotedAnswers: [],
+    //         warnings: [],
+    //         banned: false,
+    //         // banReason: null, // Omit to avoid validation complexity if any
+    //         createdAt: new Date(),
+    //         updatedAt: new Date(),
+    //     };
 
-        if (profession) newUser.profession = profession;
-        if (expertise) newUser.expertise = expertise;
+    //     if (profession) newUser.profession = profession;
+    //     if (expertise) newUser.expertise = expertise;
 
-        const result = await db.collection('users').insertOne(newUser);
-        newUser._id = result.insertedId;
+    //     const result = await db.collection('users').insertOne(newUser);
+    //     newUser._id = result.insertedId;
 
-        const token = generateToken(newUser);
+    //     const token = generateToken(newUser);
 
-        res.status(201).json({
-            message: 'Account created successfully!',
-            token,
-            user: sanitizeUser(newUser),
-        });
-    } catch (err) {
-        console.error('Signup error:', err);
-        if (err.code === 121) {
-            console.error('Validation failure details:', JSON.stringify(err.errInfo, null, 2));
-        }
-        res.status(500).json({ error: 'Failed to create account.' });
-    }
+    //     res.status(201).json({
+    //         message: 'Account created successfully!',
+    //         token,
+    //         user: sanitizeUser(newUser),
+    //     });
+    // } catch (err) {
+    //     console.error('Signup error:', err);
+    //     if (err.code === 121) {
+    //         console.error('Validation failure details:', JSON.stringify(err.errInfo, null, 2));
+    //     }
+    //     res.status(500).json({ error: 'Failed to create account.' });
+    // }
+    res.status(500).json({ error: 'Failed to create account.' });
+
 });
 
 // ──────────────── POST /api/auth/login ────────────────
