@@ -9,7 +9,7 @@ interface AnswerCardProps {
   onUpvote?: () => void;
 }
 
-export default function AnswerCard({ answer, author, currentUserId, onUpvote }: AnswerCardProps) {
+export default function AnswerCard({ answer, author, onUpvote }: AnswerCardProps) {
   const [isAnimating, setIsAnimating] = useState(false);
 
   const isLiked = answer.isLikedByMe

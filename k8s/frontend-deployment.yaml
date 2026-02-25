@@ -1,0 +1,20 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: forum-frontend
+  namespace: forum
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: forum-frontend
+  template:
+    metadata:
+      labels:
+        app: forum-frontend
+    spec:
+      containers:
+        - name: forum-frontend
+          image: mpratyush54/forum-frontend:latest
+          ports:
+            - containerPort: 80

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { User, CheckCircle, Edit, Briefcase } from 'lucide-react';
+import { User, CheckCircle, Briefcase } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { users as userApi } from '../services/api';
 
@@ -43,7 +43,7 @@ export default function Profile() {
             };
 
             const { data } = await userApi.updateProfile(updateData);
-            setUser(data.user); // Update context
+            setUser(data); // Update context
             setSuccess('Profile updated successfully!');
             setIsEditing(false);
         } catch (err) {

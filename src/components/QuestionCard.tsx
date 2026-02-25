@@ -46,17 +46,19 @@ export default function QuestionCard({ question, author }: QuestionCardProps) {
               <span>{formatDate(question.createdAt)}</span>
             </div>
           </div>
-          <div className="flex flex-col items-end gap-4 text-sm text-gray-600 dark:text-slate-400">
-            <div className="flex items-center gap-1">
-              <MessageSquare size={16} />
-              <span>{question.answerCount ?? question.answers?.length ?? 0}</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <Eye size={16} />
-              <span>{question.views}</span>
+          <div className="flex flex-col sm:items-end gap-2 sm:gap-4 text-sm text-gray-600 dark:text-slate-400 shrink-0">
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-1" title="Answers">
+                <MessageSquare size={16} />
+                <span>{question.answerCount ?? question.answers?.length ?? 0}</span>
+              </div>
+              <div className="flex items-center gap-1" title="Views">
+                <Eye size={16} />
+                <span>{question.views}</span>
+              </div>
             </div>
             <span
-              className={`px-2 py-1 rounded text-xs font-medium ${question.status === 'answered'
+              className={`px-2 py-1 rounded text-xs font-medium whitespace-nowrap ${question.status === 'answered'
                 ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
                 : 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400'
                 }`}

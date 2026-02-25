@@ -1,6 +1,6 @@
 import { CheckCircle, Clock, MessageSquare, TrendingUp, Loader2 } from 'lucide-react';
 import { useMemo, useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, Navigate } from 'react-router-dom';
 import QuestionCard from '../components/QuestionCard';
 import StatsCard from '../components/StatsCard';
 import { questions as questionApi } from '../services/api';
@@ -23,9 +23,8 @@ export default function Dashboard() {
       setLoading(true);
       try {
         // Fetch all questions by this user. 
-        // Assuming pagination limit is high enough or we just get first page for now.
-        // Ideally we'd fetch all or handle pagination, but for now getting 50 or 100 should be fine for a prototype.
-        const { data } = await questionApi.getAll({ userId: user.id, limit: 100 });
+        // We use ownerOnly=true to ensure we only get the logged-in user's questions.
+        const { data } = await questionApi.getAll({ userId: user.id, limit: 100, ownerOnly: true });
         setMyQuestions(data.questions);
       } catch (err) {
         console.error('Failed to fetch dashboard questions:', err);
@@ -113,6 +112,11 @@ export default function Dashboard() {
         <Loader2 className="w-8 h-8 animate-spin text-indigo-600" />
       </div>
     );
+  }
+
+  // Redirect specialists to their dedicated dashboard
+  if (user?.role === 'specialist') {
+    return <Navigate to="/specialist-panel" replace />;
   }
 
   return (

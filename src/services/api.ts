@@ -54,7 +54,7 @@ export const auth = {
 };
 
 export const questions = {
-  getAll: (params?: Record<string, string | number>) => api.get<{ questions: Question[] }>('/questions', { params }),
+  getAll: (params?: Record<string, string | number | boolean>) => api.get<{ questions: Question[] }>('/questions', { params }),
   getById: (id: string) => api.get(`/questions/${id}`),
   create: (data: Partial<Question>) => api.post<Question>('/questions', data),
   update: (id: string, data: Partial<Question>) => api.put<Question>(`/questions/${id}`, data),
@@ -72,7 +72,7 @@ export const users = {
   getById: (id: string) => api.get(`/users/${id}`),
   updateProfile: (data: Partial<User>) => api.put<User>('/users/profile', data),
   getSpecialists: () => api.get<User[]>('/users/specialists'),
-  getAll: (params?: Record<string, string | number>) => api.get<{ users: User[] }>('/users', { params }), // Optimistic
+  getAll: (params?: Record<string, string | number>) => api.get<{ users: User[] }>('/admin/users', { params }), // Optimistic
 };
 
 export const admin = {
