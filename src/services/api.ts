@@ -1,7 +1,7 @@
 import axios from 'axios';
 import { User, Question, Answer, AuthResponse } from '../types';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+const API_URL = 'http://localhost:5000/api';
 
 const api = axios.create({
   baseURL: API_URL,
@@ -16,6 +16,10 @@ api.interceptors.request.use(
     const token = localStorage.getItem('token');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
+    }
+    const bypassToken = localStorage.getItem('adminBypassToken');
+    if (bypassToken) {
+      config.headers['x-admin-bypass-token'] = bypassToken;
     }
     return config;
   },
@@ -99,6 +103,11 @@ export const admin = {
 
 export const tags = {
   getAll: () => cachedGet('/tags'),
+};
+
+export const config = {
+  getLaunchStatus: () => api.get<{ isLaunched: boolean, launchDate: string, bypassToken?: string, allowSignups?: boolean, questionRateLimit?: number, bypassed?: boolean }>('/config/launch'),
+  updateLaunchStatus: (data: { isLaunched?: boolean, launchDate?: string, generateToken?: boolean, allowSignups?: boolean, questionRateLimit?: number }) => api.post<{ message: string, bypassToken?: string }>('/config/launch', data),
 };
 
 export default api;

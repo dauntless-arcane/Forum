@@ -24,8 +24,8 @@ export default function QuestionCard({ question, author }: QuestionCardProps) {
   return (
     <Link to={`/question/${question.id}`}>
       <div className="bg-white dark:bg-slate-800 border border-beige/30 dark:border-slate-700 rounded-lg p-5 hover:shadow-xl hover:border-blue-400 dark:hover:border-blue-500 transition-all duration-300 transform hover:-translate-y-1">
-        <div className="flex items-start justify-between gap-4">
-          <div className="flex-1 min-w-0">
+        <div className="flex flex-col sm:flex-row items-start justify-between gap-4">
+          <div className="flex-1 w-full min-w-0">
             <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-100 mb-2 hover:text-secondary transition-colors">
               {question.title}
             </h3>
@@ -37,16 +37,16 @@ export default function QuestionCard({ question, author }: QuestionCardProps) {
                 <TagChip key={tag} tag={tag} />
               ))}
             </div>
-            <div className="flex items-center gap-4 text-sm text-gray-500 dark:text-slate-500">
-              <div className="flex items-center gap-1">
+            <div className="flex flex-wrap items-center gap-2 sm:gap-4 text-sm text-gray-500 dark:text-slate-500">
+              <div className="flex items-center gap-1 shrink-0">
                 <span>{author.avatar}</span>
-                <span>{author.name}</span>
+                <span className="truncate max-w-[120px]">{author.name}</span>
               </div>
-              <span>•</span>
-              <span>{formatDate(question.createdAt)}</span>
+              <span className="hidden sm:inline">•</span>
+              <span className="shrink-0">{formatDate(question.createdAt)}</span>
             </div>
           </div>
-          <div className="flex flex-col sm:items-end gap-2 sm:gap-4 text-sm text-gray-600 dark:text-slate-400 shrink-0">
+          <div className="flex flex-row sm:flex-col items-center sm:items-end justify-between sm:justify-start w-full sm:w-auto gap-4 text-sm text-gray-600 dark:text-slate-400 shrink-0 border-t sm:border-t-0 border-gray-100 dark:border-slate-700 pt-3 sm:pt-0 mt-1 sm:mt-0">
             <div className="flex items-center gap-4">
               <div className="flex items-center gap-1" title="Answers">
                 <MessageSquare size={16} />

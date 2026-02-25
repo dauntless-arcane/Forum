@@ -1,12 +1,17 @@
 
 import { useState, useEffect } from 'react';
-import { Outlet, useNavigate, useLocation } from 'react-router-dom';
+import { Link, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import {
     BarChart2,
     Users,
     FileText,
     AlertTriangle,
-    Zap
+    Zap,
+    Menu,
+    LogOut,
+    X,
+    ArrowLeft,
+    Settings
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useSocket } from '../../hooks/useSocket';
@@ -46,7 +51,15 @@ const SidebarItem = ({ icon: Icon, label, active, onClick, badge }: SidebarItemP
 const AdminLayout = () => {
     const navigate = useNavigate();
     const location = useLocation();
-    const { token, isAuthenticated } = useAuth();
+    const { token, isAuthenticated, logout } = useAuth();
+
+    // Mobile menu state
+    const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+    // Close mobile menu on route change
+    useEffect(() => {
+        setIsMobileMenuOpen(false);
+    }, [location.pathname]);
 
     // Live activity counter
     const [activityCount, setActivityCount] = useState(0);
@@ -91,10 +104,33 @@ const AdminLayout = () => {
     };
 
     return (
-        <div className="flex h-[calc(100vh-4rem)] bg-gray-50 dark:bg-slate-900 overflow-hidden transition-colors duration-300">
-            {/* Sidebar - Desktop */}
-            <aside className="w-64 bg-white dark:bg-slate-800 border-r border-gray-200 dark:border-slate-700 hidden md:flex flex-col">
-                <div className="p-6 border-b border-gray-200 dark:border-slate-700">
+        <div className="relative flex flex-col md:flex-row min-h-screen bg-gray-50 dark:bg-slate-900 transition-colors duration-300 w-full max-w-full overflow-x-hidden">
+            {/* Mobile Header Toggle */}
+            <div className="sticky top-0 z-20 h-14 bg-white dark:bg-slate-800 border-b border-gray-200 dark:border-slate-700 md:hidden flex items-center justify-between px-4 shrink-0 shadow-sm w-full">
+                <span className="font-bold text-gray-800 dark:text-white">Admin Panel</span>
+                <button
+                    onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+                    className="p-2 -mr-2 text-gray-600 dark:text-gray-300 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700"
+                >
+                    {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
+                </button>
+            </div>
+
+            {/* Mobile Backdrop */}
+            {isMobileMenuOpen && (
+                <div
+                    className="fixed inset-0 bg-black/50 z-20 md:hidden"
+                    onClick={() => setIsMobileMenuOpen(false)}
+                />
+            )}
+
+            {/* Sidebar */}
+            <aside className={`
+                fixed md:sticky md:top-0 inset-y-0 left-0 z-30 w-64 bg-white dark:bg-slate-800 border-r border-gray-200 dark:border-slate-700 flex flex-col h-screen
+                transform transition-transform duration-300
+                ${isMobileMenuOpen ? 'translate-x-0 pt-14 md:pt-0' : '-translate-x-full md:translate-x-0'}
+            `}>
+                <div className="p-6 border-b border-gray-200 dark:border-slate-700 hidden md:block">
                     <h2 className="text-xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
                         Admin Panel
                     </h2>
@@ -131,10 +167,24 @@ const AdminLayout = () => {
                         active={isActive('/admin/reports')}
                         onClick={() => navigate('/admin/reports')}
                     />
+                    <SidebarItem
+                        icon={Settings}
+                        label="Platform Settings"
+                        path="/admin/settings"
+                        active={isActive('/admin/settings')}
+                        onClick={() => navigate('/admin/settings')}
+                    />
                 </nav>
 
-                {/* Live Activity Ticker */}
+                {/* Sidebar Footer Actions */}
                 <div className="border-t border-gray-200 dark:border-slate-700 p-4">
+                    <Link
+                        to="/"
+                        className="w-full flex items-center justify-center gap-2 px-4 py-2 mb-4 bg-primary text-white rounded-xl transition-colors font-medium text-sm hover:bg-primary/90 shadow-sm"
+                    >
+                        <ArrowLeft size={16} /> Back to App
+                    </Link>
+
                     <div className="flex items-center gap-2 mb-3">
                         <Zap size={16} className={connected ? 'text-green-500' : 'text-gray-400'} />
                         <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
@@ -146,9 +196,9 @@ const AdminLayout = () => {
                     </div>
 
                     {recentEvents.length === 0 ? (
-                        <p className="text-xs text-gray-400 dark:text-gray-500 italic">No recent events</p>
+                        <p className="text-xs text-gray-400 dark:text-gray-500 italic mb-4">No recent events</p>
                     ) : (
-                        <div className="space-y-2">
+                        <div className="space-y-2 mb-4">
                             {recentEvents.map((ev, i) => (
                                 <div key={i} className="flex items-center gap-2 text-xs animate-fade-in-up">
                                     <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${ev.type === 'question' ? 'bg-blue-500' : 'bg-purple-500'}`} />
@@ -158,11 +208,18 @@ const AdminLayout = () => {
                             ))}
                         </div>
                     )}
+
+                    <button
+                        onClick={() => { logout(); navigate('/login'); }}
+                        className="w-full flex items-center justify-center gap-2 px-4 py-2 mt-2 bg-red-50 hover:bg-red-100 dark:bg-red-900/20 dark:hover:bg-red-900/40 text-red-600 dark:text-red-400 rounded-xl transition-colors font-medium text-sm"
+                    >
+                        <LogOut size={16} /> Logout
+                    </button>
                 </div>
             </aside>
 
             {/* Main Content */}
-            <main className="flex-1 overflow-y-auto p-4 md:p-8">
+            <main id="admin-main-content" className="flex-1 p-4 md:p-8 w-full min-w-0">
                 <div className="max-w-7xl mx-auto space-y-8 animate-fade-in-up">
                     <Outlet />
                 </div>

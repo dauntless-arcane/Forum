@@ -254,16 +254,16 @@ export default function Explore() {
 
       {/* ── Search + Filter bar ───────────────────── */}
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 mb-6">
-        <div className="flex-1">
+        <div className="tour-search flex-1">
           <SearchBar value={searchQuery} onChange={setSearchQuery} />
         </div>
 
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex flex-col min-[400px]:flex-row items-stretch min-[400px]:items-center gap-2 shrink-0">
           {/* Sort pills */}
           <div className="flex bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg overflow-hidden text-sm shadow-sm">
             <button
               onClick={() => setSortBy('latest')}
-              className={`px-4 py-2.5 font-medium transition-colors ${sortBy === 'latest'
+              className={`flex-1 min-[400px]:flex-none px-4 py-2.5 font-medium transition-colors ${sortBy === 'latest'
                 ? 'bg-secondary text-white'
                 : 'text-gray-600 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700'
                 }`}
@@ -272,7 +272,7 @@ export default function Explore() {
             </button>
             <button
               onClick={() => setSortBy('unanswered')}
-              className={`px-4 py-2.5 font-medium transition-colors ${sortBy === 'unanswered'
+              className={`flex-1 min-[400px]:flex-none px-4 py-2.5 font-medium transition-colors ${sortBy === 'unanswered'
                 ? 'bg-secondary text-white'
                 : 'text-gray-600 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700'
                 }`}
@@ -284,7 +284,7 @@ export default function Explore() {
           {/* Filter toggle */}
           <button
             onClick={() => setShowFilters(!showFilters)}
-            className={`relative flex items-center gap-1.5 px-4 py-2.5 rounded-lg border text-sm font-medium shadow-sm transition-all ${showFilters || selectedTags.length
+            className={`tour-filters relative flex justify-center items-center gap-1.5 px-4 py-2.5 rounded-lg border text-sm font-medium shadow-sm transition-all w-full min-[400px]:w-auto ${showFilters || selectedTags.length
               ? 'bg-secondary/10 border-secondary text-secondary dark:bg-secondary/20 dark:text-blue-300'
               : 'bg-white dark:bg-slate-800 border-gray-200 dark:border-slate-700 text-gray-600 dark:text-slate-300 hover:border-secondary'
               }`}
