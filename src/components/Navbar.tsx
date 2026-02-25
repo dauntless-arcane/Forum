@@ -56,8 +56,7 @@ export default function Navbar({ darkMode, toggleDarkMode }: NavbarProps) {
 
             {/* Logo */}
             <Link to="/" className="flex items-center gap-2 text-xl font-bold">
-              <BrainCircuitIcon size={26} />
-              Recalibrate
+              <img src={darkMode ? "/caps-icon-dark.jpeg" : "/caps-icon.jpeg"} alt="Logo" width={50} height={50} className="rounded-lg object-cover" />
             </Link>
 
             {/* Desktop Menu */}

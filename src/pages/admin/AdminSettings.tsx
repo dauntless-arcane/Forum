@@ -20,7 +20,7 @@ const AdminSettings = () => {
     const fetchConfig = async () => {
         try {
             setLoading(true);
-            const { data } = await config.getLaunchStatus();
+            const { data } = await config.getLaunchStatus(true);
 
             // Fix datetime-local UTC offset shift
             const localDate = new Date(data.launchDate || Date.now());
@@ -31,7 +31,7 @@ const AdminSettings = () => {
                 isLaunched: data.isLaunched,
                 launchDate: formattedDate,
                 bypassToken: data.bypassToken || '',
-                allowSignups: data.allowSignups !== false, // default true
+                allowSignups: data.allowSignups === true, // default false
                 questionRateLimit: data.questionRateLimit || 5
             });
         } catch (error) {
@@ -117,7 +117,7 @@ const AdminSettings = () => {
                             value={status.launchDate}
                             onChange={e => setStatus(prev => ({ ...prev, launchDate: e.target.value }))}
                             onClick={(e) => 'showPicker' in e.target && (e.target as HTMLInputElement).showPicker()}
-                            className="w-full px-4 py-3 bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 dark:text-white transition-all shadow-sm cursor-pointer"
+                            className="w-full px-4 py-3 bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 dark:text-white transition-all shadow-sm cursor-pointer dark:[color-scheme:dark]"
                         />
                     </div>
 
