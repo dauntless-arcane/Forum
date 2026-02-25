@@ -258,8 +258,8 @@ const AdminModeration = () => {
             </div>
 
             {/* Content Feed */}
-            <div className="lg:col-span-2 bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-gray-100 dark:border-slate-700 overflow-hidden">
-                <div className="p-6 border-b border-gray-100 dark:border-slate-700 flex justify-between items-center">
+            <div className="lg:col-span-2 bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-gray-100 dark:border-slate-700 flex flex-col h-fit">
+                <div className="p-6 border-b border-gray-100 dark:border-slate-700 flex justify-between items-center shrink-0">
                     <div>
                         <h3 className="text-lg font-bold text-gray-800 dark:text-white flex items-center gap-2">
                             <Activity size={20} className="text-green-500" /> Live Content Feed
@@ -290,15 +290,15 @@ const AdminModeration = () => {
                     </div>
                 ) : (
                     <Virtuoso
-                        style={{ height: '600px' }}
-                        className="divide-y divide-gray-100 dark:divide-slate-700 overflow-y-auto"
+                        useWindowScroll
+                        className="divide-y divide-gray-100 dark:divide-slate-700 w-full"
                         data={contentFeed}
                         endReached={() => feedHasMore && !isFetchingMore && handleLoadMoreFeed()}
                         itemContent={(_, item) => (
                             <div className="p-6 hover:bg-gray-50 dark:hover:bg-slate-700/30 transition-colors animate-fade-in-up">
-                                <div className="flex justify-between items-start gap-4">
-                                    <div className="flex-1">
-                                        <div className="flex items-center gap-2 mb-2">
+                                <div className="flex flex-col sm:flex-row justify-between items-start gap-4">
+                                    <div className="flex-1 min-w-0 w-full">
+                                        <div className="flex flex-wrap items-center gap-2 mb-2">
                                             <span className={`px-2 py-0.5 rounded text-xs font-bold uppercase ${item.type === 'question'
                                                 ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
                                                 : 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300'
@@ -315,10 +315,10 @@ const AdminModeration = () => {
 
                                         {item.title && (
                                             <Link to={`/question/${item.id}`} className="block">
-                                                <h4 className="font-bold text-gray-800 dark:text-white mb-1 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">{item.title}</h4>
+                                                <h4 className="font-bold text-gray-800 dark:text-white mb-1 hover:text-blue-600 dark:hover:text-blue-400 transition-colors break-words">{item.title}</h4>
                                             </Link>
                                         )}
-                                        <p className="text-gray-600 dark:text-gray-300 text-sm line-clamp-2">
+                                        <p className="text-gray-600 dark:text-gray-300 text-sm line-clamp-2 break-words">
                                             {item.description || item.content}
                                         </p>
 

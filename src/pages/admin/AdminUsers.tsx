@@ -207,7 +207,7 @@ const AdminUsers = () => {
                 <div className="p-6 border-b border-gray-100 dark:border-slate-700 flex flex-col md:flex-row justify-between items-center gap-4">
                     <h3 className="text-lg font-bold text-gray-800 dark:text-white">All Users</h3>
 
-                    <div className="flex flex-col md:flex-row gap-4 w-full md:w-auto">
+                    <div className="flex flex-col sm:flex-row gap-4 w-full md:w-auto">
                         <div className="w-full md:w-64">
                             <SearchBar
                                 value={searchQuery}
@@ -216,16 +216,16 @@ const AdminUsers = () => {
                                 debounceTime={300}
                             />
                         </div>
-                        <div className="flex gap-2">
+                        <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto mt-2 sm:mt-0">
                             <button
                                 onClick={handleOpenBulkApprove}
-                                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition flex items-center gap-2 whitespace-nowrap"
+                                className="w-full sm:w-auto justify-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition flex items-center gap-2 whitespace-nowrap"
                             >
                                 <CheckCircle size={18} /> Review Pending
                             </button>
                             <button
                                 onClick={() => { setCreatedUsers([]); setIsBulkCreateOpen(true); }}
-                                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition flex items-center gap-2 whitespace-nowrap"
+                                className="w-full sm:w-auto justify-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition flex items-center gap-2 whitespace-nowrap"
                             >
                                 <Users size={18} /> Bulk Create
                             </button>
@@ -266,8 +266,8 @@ const AdminUsers = () => {
                                 Review the users waiting for approval. Select users to approve or reject.
                             </p>
 
-                            <div className="bg-gray-50 dark:bg-slate-900 rounded-lg border border-gray-200 dark:border-slate-700 overflow-hidden">
-                                <table className="w-full text-sm text-left">
+                            <div className="bg-gray-50 dark:bg-slate-900 rounded-lg border border-gray-200 dark:border-slate-700 overflow-x-auto w-full">
+                                <table className="w-full text-sm text-left min-w-[600px] hidden md:table">
                                     <thead className="bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-gray-300">
                                         <tr>
                                             <th className="p-3 w-10">
@@ -310,6 +310,49 @@ const AdminUsers = () => {
                                         ))}
                                     </tbody>
                                 </table>
+
+                                {/* Mobile Cards View */}
+                                <div className="md:hidden flex flex-col gap-3 p-3">
+                                    {users.filter(u => u.status === 'Pending').length === 0 && (
+                                        <div className="text-center text-gray-500 py-4">No pending users</div>
+                                    )}
+                                    <div className="flex items-center gap-2 mb-2 p-2 bg-gray-100 dark:bg-slate-800 rounded-lg">
+                                        <input
+                                            type="checkbox"
+                                            checked={users.filter(u => u.status === 'Pending').length > 0 && users.filter(u => u.status === 'Pending').every(u => selectedUsers.includes(u.id))}
+                                            onChange={(e) => {
+                                                const pending = users.filter(u => u.status === 'Pending');
+                                                if (e.target.checked) {
+                                                    setSelectedUsers(pending.map(u => u.id));
+                                                } else {
+                                                    setSelectedUsers([]);
+                                                }
+                                            }}
+                                            className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 w-5 h-5 focus:outline-none"
+                                        />
+                                        <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">Select All</span>
+                                    </div>
+                                    {users.filter(u => u.status === 'Pending').map((user) => (
+                                        <div key={user.id} className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg p-4 flex flex-col gap-2 shadow-sm">
+                                            <div className="flex justify-between items-start gap-2">
+                                                <div className="flex items-center gap-2">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={selectedUsers.includes(user.id)}
+                                                        onChange={() => toggleUserSelection(user.id)}
+                                                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 w-5 h-5 focus:outline-none shrink-0"
+                                                    />
+                                                    <span className="font-bold text-gray-900 dark:text-gray-100">{user.name}</span>
+                                                </div>
+                                            </div>
+                                            <div className="text-sm text-gray-500 dark:text-gray-400 break-words pl-7">Email: {user.email || 'N/A'}</div>
+                                            <div className="flex justify-between text-xs text-gray-500 pl-7 mt-1">
+                                                <span className="bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300 px-2 py-0.5 rounded-full font-medium">{user.role}</span>
+                                                <span>Joined: {user.joined}</span>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
                             </div>
 
                             <div className="mt-6 flex justify-between items-center">

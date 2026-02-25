@@ -160,7 +160,7 @@ export default function Dashboard() {
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
 
         {/* Filter Tabs */}
-        <div className="flex gap-2 bg-white dark:bg-slate-800 p-1 rounded-lg w-fit">
+        <div className="flex flex-wrap gap-2 bg-white dark:bg-slate-800 p-1 rounded-lg w-fit">
           {['all', 'answered', 'pending'].map((tab) => (
             <button
               key={tab}
@@ -176,19 +176,19 @@ export default function Dashboard() {
         </div>
 
         {/* Search + Sort */}
-        <div className="flex gap-3">
+        <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto mt-4 md:mt-0">
           <input
             type="text"
             placeholder="Search your questions..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="px-4 py-2 bg-white dark:bg-slate-800 border border-slate-700 rounded-lg text-gray-900 dark:text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-accent"
+            className="w-full sm:w-64 px-4 py-2 bg-white dark:bg-slate-800 border border-slate-700 rounded-lg text-gray-900 dark:text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-accent"
           />
 
           <select
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value as any)}
-            className="px-4 py-2 bg-white dark:bg-slate-800 border border-slate-700 rounded-lg text-gray-900 dark:text-slate-100 focus:outline-none"
+            className="w-full sm:w-auto px-4 py-2 bg-white dark:bg-slate-800 border border-slate-700 rounded-lg text-gray-900 dark:text-slate-100 focus:outline-none"
           >
             <option value="latest">Latest</option>
             <option value="views">Most Viewed</option>

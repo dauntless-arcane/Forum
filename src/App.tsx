@@ -12,6 +12,9 @@ import Login from './pages/Login';
 import Signup from './pages/Signup';
 import Profile from './pages/Profile';
 import ProtectedRoute from './components/ProtectedRoute';
+import OnboardingTour from './components/OnboardingTour';
+import LandingPage from './pages/LandingPage';
+import { config } from './services/api';
 
 // Admin Pages
 import AdminLayout from "./pages/admin/AdminLayout";
@@ -19,6 +22,7 @@ import AdminOverview from "./pages/admin/AdminOverview";
 import AdminUsers from "./pages/admin/AdminUsers";
 import AdminModeration from "./pages/admin/AdminModeration";
 import AdminReports from "./pages/admin/AdminReports";
+import AdminSettings from "./pages/admin/AdminSettings";
 
 function App() {
   const [darkMode, setDarkMode] = useState(() => {
@@ -37,15 +41,62 @@ function App() {
 
   const toggleDarkMode = () => setDarkMode(!darkMode);
 
+  const [appConfig, setAppConfig] = useState<{ isLaunched: boolean, launchDate: string, allowSignups?: boolean } | null>(null);
+
+  useEffect(() => {
+    // Check if a bypass token is passed via URL
+    const searchParams = new URLSearchParams(window.location.search);
+    const urlToken = searchParams.get('token');
+
+    if (urlToken) {
+      localStorage.setItem('adminBypassToken', urlToken);
+      // Clean up URL to hide the token from sight
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+
+    config.getLaunchStatus()
+      .then(res => {
+        setAppConfig(res.data);
+        // If the platform is natively launched (not just bypassed lock), 
+        // we no longer need the bypass token, so we clean it up entirely.
+        if (res.data.isLaunched === true && !res.data.bypassed) {
+          localStorage.removeItem('adminBypassToken');
+        }
+      })
+      .catch(err => {
+        console.error("Failed to check launch status", err);
+        // Fallback to launched to not block development if backend isn't ready
+        setAppConfig({ isLaunched: true, launchDate: '' });
+      });
+  }, []);
+
+  if (!appConfig) {
+    return (
+      <div className="min-h-screen bg-slate-900 flex items-center justify-center">
+        <div className="animate-pulse text-white font-bold text-xl">Loading...</div>
+      </div>
+    );
+  }
+
+  if (appConfig.isLaunched === false) {
+    return <LandingPage launchDate={appConfig.launchDate} />;
+  }
+
   return (
     <AuthProvider>
       <Router>
-        <div className="min-h-screen bg-gray-50 dark:bg-slate-900 transition-colors">
-          <Navbar darkMode={darkMode} toggleDarkMode={toggleDarkMode} />
+        <div className="min-h-screen w-full overflow-x-hidden bg-gray-50 dark:bg-slate-900 transition-colors flex flex-col pb-[110px] md:pb-0">
+          <Routes>
+            <Route path="/admin*" element={null} />
+            <Route path="*" element={<Navbar darkMode={darkMode} toggleDarkMode={toggleDarkMode} />} />
+          </Routes>
+          <OnboardingTour />
           <Routes>
             <Route path="/" element={<Explore />} />
             <Route path="/login" element={<Login />} />
-            <Route path="/signup" element={<Signup />} />
+            {appConfig.allowSignups !== false && (
+              <Route path="/signup" element={<Signup />} />
+            )}
 
             <Route element={<ProtectedRoute />}>
               <Route path="/dashboard" element={<Dashboard />} />
@@ -65,6 +116,7 @@ function App() {
                 <Route path="users" element={<AdminUsers />} />
                 <Route path="moderation" element={<AdminModeration />} />
                 <Route path="reports" element={<AdminReports />} />
+                <Route path="settings" element={<AdminSettings />} />
               </Route>
             </Route>
           </Routes>
