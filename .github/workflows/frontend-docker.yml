@@ -3,7 +3,7 @@ name: Build & Push Frontend Docker Image
 on:
   push:
     branches:
-      - main   # change if needed
+      - main
 
 jobs:
   build:
@@ -16,7 +16,6 @@ jobs:
       - name: Set up QEMU (for ARM builds)
         uses: docker/setup-qemu-action@v3
 
-
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -26,12 +25,12 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USER }}
           password: ${{ secrets.DOCKERHUB_PASS }}
 
-      - name: Build and Push Image
+      - name: Build and Push Multi-Arch Image
         uses: docker/build-push-action@v5
         with:
           context: .
           push: true
-          tags: |
           platforms: linux/amd64,linux/arm64
+          tags: |
             ${{ secrets.DOCKERHUB_USER }}/forum-frontend:latest
             ${{ secrets.DOCKERHUB_USER }}/forum-frontend:${{ github.sha }}
