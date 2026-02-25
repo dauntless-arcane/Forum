@@ -113,8 +113,8 @@ function App() {
           <OnboardingTour />
           <Routes>
             <Route path="/" element={<Explore />} />
-            <Route path="/login" element={<Login />} />
-            {appConfig.allowSignups !== false && (
+            <Route path="/login" element={<Login allowSignups={appConfig.allowSignups === true} />} />
+            {appConfig.allowSignups === true && (
               <Route path="/signup" element={<Signup />} />
             )}
 
