@@ -34,7 +34,9 @@ router.get('/launch', async (req, res) => {
             status = {
                 isLaunched: configDoc?.isLaunched ?? true,
                 launchDate: configDoc?.launchDate ?? new Date().toISOString(),
-                bypassToken: configDoc?.bypassToken || null
+                bypassToken: configDoc?.bypassToken || null,
+                allowSignups: configDoc?.allowSignups,
+                questionRateLimit: configDoc?.questionRateLimit
             };
 
             await cacheSet(CACHE_KEY, status, 300); // RTL 5 mins (300 seconds)
@@ -91,14 +93,14 @@ router.get('/launch', async (req, res) => {
  */
 router.post('/launch', authenticate, authorize('admin'), async (req, res) => {
     try {
-        const { isLaunched, launchDate, generateToken } = req.body;
+        const { isLaunched, launchDate, generateToken, allowSignups, questionRateLimit } = req.body;
         const db = getDB();
 
         let updates = {
             isLaunched: Boolean(isLaunched),
             launchDate: launchDate || new Date().toISOString(),
-            allowSignups: req.body.allowSignups !== undefined ? Boolean(req.body.allowSignups) : true,
-            questionRateLimit: req.body.questionRateLimit !== undefined ? Number(req.body.questionRateLimit) : 5,
+            allowSignups: allowSignups !== undefined ? Boolean(allowSignups) : true,
+            questionRateLimit: questionRateLimit !== undefined ? Number(questionRateLimit) : 5,
             updatedAt: new Date()
         };
 
