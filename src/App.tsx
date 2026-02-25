@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { ServerCrash } from 'lucide-react';
 import { Route, BrowserRouter as Router, Routes } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import Navbar from './components/Navbar';
@@ -41,6 +42,7 @@ function App() {
 
   const toggleDarkMode = () => setDarkMode(!darkMode);
 
+  const [apiError, setApiError] = useState(false);
   const [appConfig, setAppConfig] = useState<{ isLaunched: boolean, launchDate: string, allowSignups?: boolean } | null>(null);
 
   useEffect(() => {
@@ -65,15 +67,33 @@ function App() {
       })
       .catch(err => {
         console.error("Failed to check launch status", err);
-        // Fallback to launched to not block development if backend isn't ready
-        setAppConfig({ isLaunched: true, launchDate: '' });
+        setApiError(true);
       });
   }, []);
+
+  if (apiError) {
+    return (
+      <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center p-4">
+        <ServerCrash className="w-16 h-16 text-red-500 mb-6" />
+        <h1 className="text-2xl font-bold text-white tracking-widest uppercase mb-2">Service Unavailable</h1>
+        <p className="text-slate-400 text-center max-w-md">Our servers are currently unreachable or undergoing maintenance. Please try again later.</p>
+        <button
+          onClick={() => window.location.reload()}
+          className="mt-8 px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors border border-blue-500"
+        >
+          Retry Connection
+        </button>
+      </div>
+    );
+  }
 
   if (!appConfig) {
     return (
       <div className="min-h-screen bg-slate-900 flex items-center justify-center">
-        <div className="animate-pulse text-white font-bold text-xl">Loading...</div>
+        <div className="animate-pulse text-white font-bold text-xl flex items-center gap-3">
+          <div className="w-6 h-6 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+          Connecting...
+        </div>
       </div>
     );
   }
