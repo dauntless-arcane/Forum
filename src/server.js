@@ -103,6 +103,10 @@ const io = new Server(server, {
     connectTimeout: 10000,
     maxHttpBufferSize: 1e6,
     perMessageDeflate: { threshold: 1024 },
+    connectionStateRecovery: {
+        maxDisconnectionDuration: 2 * 60 * 1000, // 2 minutes
+        skipMiddlewares: true,
+    },
 });
 
 
