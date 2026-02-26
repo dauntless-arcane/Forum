@@ -44,5 +44,8 @@
   "devDependencies": {
     "nodemon": "^3.1.11",
     "socket.io-client": "^4.8.3"
+  },
+  "overrides": {
+    "glob": "^8.0.0"
   }
 }

@@ -40,6 +40,7 @@ const moderationRoutes = require('./routes/moderation');
 const tagRoutes = require('./routes/tags');
 const adminRoutes = require('./routes/admin');
 const configRoutes = require('./routes/config');
+const webhookRoutes = require('./routes/webhook');
 const { launchCheck } = require('./middleware/launchCheck');
 
 const swaggerUi = require('swagger-ui-express');
@@ -227,6 +228,7 @@ app.use('/api/moderation', launchCheck, moderationRoutes);
 app.use('/api/tags', launchCheck, tagRoutes);
 app.use('/api/admin', launchCheck, adminRoutes);
 app.use('/api/config', configRoutes); // Config manages the launch status itself
+app.use('/', webhookRoutes); // Top-level endpoint for external webhooks like Google Sheets
 
 
 // ──────────────── 404 Handler ────────────────
