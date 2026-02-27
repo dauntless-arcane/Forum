@@ -232,13 +232,7 @@ export default function Navbar({ darkMode, toggleDarkMode }: NavbarProps) {
               <span className="text-[10px] mt-1 font-medium">Explore</span>
             </Link>
 
-            {/* Specialist Panel */}
-            {user?.role === 'specialist' && (
-              <Link to="/specialist-panel" className={`tour-mobile-panel flex flex-col items-center justify-center h-full min-w-[64px] ${isActive('/specialist-panel') ? 'text-secondary dark:text-blue-400' : 'text-gray-500 dark:text-slate-400 hover:text-secondary'}`}>
-                <Briefcase size={22} className={isActive('/specialist-panel') ? 'fill-secondary/20' : ''} />
-                <span className="text-[10px] mt-1 font-medium">Panel</span>
-              </Link>
-            )}
+
 
             {/* Admin Dashboard */}
             {user?.role === 'admin' && (
@@ -284,6 +278,14 @@ export default function Navbar({ darkMode, toggleDarkMode }: NavbarProps) {
               <Link to="/dashboard" className={`tour-mobile-dashboard flex flex-col items-center justify-center h-full min-w-[64px] ${isActive('/dashboard') ? 'text-secondary dark:text-blue-400' : 'text-gray-500 dark:text-slate-400 hover:text-secondary'}`}>
                 <LayoutDashboard size={22} className={isActive('/dashboard') ? 'fill-secondary/20' : ''} />
                 <span className="text-[10px] mt-1 font-medium">Dashboard</span>
+              </Link>
+            )}
+
+            {/* Specialist Panel */}
+            {user?.role === 'specialist' && (
+              <Link to="/specialist-panel" className={`tour-mobile-panel flex flex-col items-center justify-center h-full min-w-[64px] ${isActive('/specialist-panel') ? 'text-secondary dark:text-blue-400' : 'text-gray-500 dark:text-slate-400 hover:text-secondary'}`}>
+                <Briefcase size={22} className={isActive('/specialist-panel') ? 'fill-secondary/20' : ''} />
+                <span className="text-[10px] mt-1 font-medium">Panel</span>
               </Link>
             )}
 
