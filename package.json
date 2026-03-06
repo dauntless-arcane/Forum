@@ -4,6 +4,7 @@
   "main": "src/server.js",
   "scripts": {
     "start": "node src/server.js",
+    "start-new": "infisical run  -- node src/server.js",
     "dev": "npx nodemon src/server.js",
     "seed": "node src/seed.js"
   },
