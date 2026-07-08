@@ -10,7 +10,6 @@ function connectRedis() {
     const redisConfig = {
         host: process.env.REDIS_HOST || 'localhost',
         port: Number(process.env.REDIS_PORT) || 6379,
-        password: process.env.REDIS_PASSWORD || undefined,
         db: 0,
         maxRetriesPerRequest: 3,
         retryDelayOnFailover: 100,
